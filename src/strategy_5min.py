@@ -506,7 +506,7 @@ class SimpleArbitrageBot:
         data = [formatted_str,
             self.order.get("direction"),
             self.order.get("entry_price"),
-            result
+            1 if result == self.order.get("direction") else -self.order.get("entry_price")
         ]
         # Write to CSV
         csv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'result.csv')
@@ -530,15 +530,15 @@ class SimpleArbitrageBot:
             return False  # 发出停止机器人的信号
 
         price_up, price_down, size_up, size_down, best_up, best_down = self.get_current_prices()
-        if price_up <= 0.37 or price_down <= 0.37:
+        if price_up <= self.settings.yes_buy_threshold or price_down <= self.settings.no_buy_threshold:
             # Perform Buy
-            if price_up <= 0.37:
+            if price_up <= self.settings.yes_buy_threshold:
                 self.order = {"time_stamp": str(datetime.now().timestamp()),
                     "direction": "UP",
                     "entry_price": price_up
                 }
                 logger.info(f"买入UP: ${price_up:.4f}")
-            elif price_down <= 0.37:
+            elif price_down <= self.settings.no_buy_threshold:
                 self.order = {"time_stamp": str(datetime.now().timestamp()),
                     "direction": "DOWN",
                     "entry_price": price_down
