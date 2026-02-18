@@ -192,36 +192,43 @@ class SimpleArbitrageBot:
         返回:
             (up_price, down_price, up_size, down_size) - 价格和可用数量
         """
-        try:
-            # 批量获取两个方向的最后交易价格
+        max_retries = 3
+        for attempt in range(1, max_retries + 1):
+            try:
+                # 批量获取两个方向的最后交易价格
 
-            params = [
-                BookParams(token_id=self.yes_token_id),
-                BookParams(token_id=self.no_token_id)
-            ]
-            prices_response = self.client.get_last_trades_prices(params=params)
+                params = [
+                    BookParams(token_id=self.yes_token_id),
+                    BookParams(token_id=self.no_token_id)
+                ]
+                prices_response = self.client.get_last_trades_prices(params=params)
 
-            # prices_response 应为列表或字典，需根据SDK实际返回结构调整
-            price_up = price_down = 0
-            for item in prices_response:
-                if item.get("token_id") == self.yes_token_id:
-                    price_up = float(item.get("price", 0))
-                elif item.get("token_id") == self.no_token_id:
-                    price_down = float(item.get("price", 0))
-            # 获取订单簿以检查可用流动性
-                    # 获取订单簿数据（一次请求拿到 UP/DOWN）
-            books = self._fetch_orderbooks([self.yes_token_id, self.no_token_id])
-            orderbook_up = books.get(self.yes_token_id, {})
-            orderbook_down = books.get(self.no_token_id, {})
-            size_up = orderbook_up.get("ask_size", 0)
-            size_down = orderbook_down.get("ask_size", 0)
-            best_up = orderbook_up.get("best_ask", 0)
-            best_down = orderbook_down.get("best_ask", 0)
-            logger.info(f'Up Price: {price_up:.4f}, Down Price: {price_down:.4f}')
-            return price_up, price_down, size_up, size_down, best_up, best_down
-        except Exception as e:
-            logger.error(f"获取价格时出错: {e}")
-            return None, None, None, None, None, None
+                # prices_response 应为列表或字典，需根据SDK实际返回结构调整
+                price_up = price_down = 0
+                for item in prices_response:
+                    if item.get("token_id") == self.yes_token_id:
+                        price_up = float(item.get("price", 0))
+                    elif item.get("token_id") == self.no_token_id:
+                        price_down = float(item.get("price", 0))
+                # 获取订单簿以检查可用流动性
+                        # 获取订单簿数据（一次请求拿到 UP/DOWN）
+                books = self._fetch_orderbooks([self.yes_token_id, self.no_token_id])
+                orderbook_up = books.get(self.yes_token_id, {})
+                orderbook_down = books.get(self.no_token_id, {})
+                size_up = orderbook_up.get("ask_size", 0)
+                size_down = orderbook_down.get("ask_size", 0)
+                best_up = orderbook_up.get("best_ask", 0)
+                best_down = orderbook_down.get("best_ask", 0)
+                logger.info(f'Up Price: {price_up:.4f}, Down Price: {price_down:.4f}')
+                return price_up, price_down, size_up, size_down, best_up, best_down
+            except Exception as e:
+                logger.error(f"获取价格时出错 (attempt {attempt}/{max_retries}): {e}")
+                if attempt < max_retries:
+                    import time
+                    time.sleep(1)
+                else:
+                    logger.error(f"获取价格失败，已重试 {max_retries} 次")
+                    return None, None, None, None, None, None
 
     def _fetch_orderbooks(self, token_ids: List[str]) -> dict:
         """批量获取多个 token 的订单簿（一次请求），按 asset_id 映射。"""
