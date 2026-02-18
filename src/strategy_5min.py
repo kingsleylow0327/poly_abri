@@ -506,7 +506,7 @@ class SimpleArbitrageBot:
         data = [formatted_str,
             self.order.get("direction"),
             self.order.get("entry_price"),
-            1 if result == self.order.get("direction") else -self.order.get("entry_price")
+            (1 - self.order.get("entry_price")) if result == self.order.get("direction") else -self.order.get("entry_price")
         ]
         # Write to CSV
         csv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'result.csv')
