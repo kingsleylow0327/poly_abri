@@ -115,7 +115,7 @@ class SimpleArbitrageBot:
         import re
         match = re.search(rf'{symbol}-updown-5m-(\d+)', market_slug)
         market_start = int(match.group(1)) if match else None
-        self.strategy_start_timestamp = market_start + 0
+        self.strategy_start_timestamp = market_start + self.settings.strategy_start_timestamp
         self.strategy_end_timestamp = market_start + 120 if market_start else None  # +2 分钟
         self.market_end_timestamp = market_start + 300 if market_start else None  # +5 分钟
         self.market_slug = market_slug
