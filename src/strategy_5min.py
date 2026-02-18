@@ -115,7 +115,8 @@ class SimpleArbitrageBot:
         import re
         match = re.search(rf'{symbol}-updown-5m-(\d+)', market_slug)
         market_start = int(match.group(1)) if match else None
-        self.strategy_end_timestamp = market_start + 120 if market_start else None  # +5 分钟
+        self.strategy_start_timestamp = market_start + 0
+        self.strategy_end_timestamp = market_start + 120 if market_start else None  # +2 分钟
         self.market_end_timestamp = market_start + 300 if market_start else None  # +5 分钟
         self.market_slug = market_slug
 
@@ -158,6 +159,21 @@ class SimpleArbitrageBot:
         remaining = self.strategy_end_timestamp - now
 
         if remaining <= 0:
+            return "CLOSED"
+
+        minutes = int(remaining // 60)
+        seconds = int(remaining % 60)
+        return f"{minutes}m {seconds}s"
+    
+    def get_strategy_remaining_to_start(self) -> str:
+        """获取策略剩余时间。"""
+        if not self.strategy_start_timestamp:
+            return "Unknown"
+
+        now = int(datetime.now().timestamp())
+        remaining = self.strategy_start_timestamp - now
+
+        if remaining >= 0:
             return "CLOSED"
 
         minutes = int(remaining // 60)
@@ -506,7 +522,7 @@ class SimpleArbitrageBot:
         data = [formatted_str,
             self.order.get("direction"),
             self.order.get("entry_price"),
-            (1 - self.order.get("entry_price")) if result == self.order.get("direction") else -self.order.get("entry_price")
+            f"{(1 - self.order.get("entry_price")):.2f}" if result == self.order.get("direction") else f"{-self.order.get("entry_price"):.4f}"
         ]
         # Write to CSV
         csv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'result.csv')
@@ -525,20 +541,21 @@ class SimpleArbitrageBot:
             return False  # 发出停止机器人的信号
         
         # Check the time is within 2 min
-        strategy_remaining = self.get_strategy_remaining()
-        if strategy_remaining == "CLOSED":
+        # strategy_remaining = self.get_strategy_remaining()
+        strategy_remaining_to_start = self.get_strategy_remaining_to_start()
+        if strategy_remaining_to_start == "CLOSED":
             return False  # 发出停止机器人的信号
 
         price_up, price_down, size_up, size_down, best_up, best_down = self.get_current_prices()
-        if price_up <= self.settings.yes_buy_threshold or price_down <= self.settings.no_buy_threshold:
+        if price_up >= self.settings.yes_buy_threshold and price_up <= 0.95 or price_down >= self.settings.no_buy_threshold and price_down <= 0.95:
             # Perform Buy
-            if price_up <= self.settings.yes_buy_threshold:
+            if price_up >= self.settings.yes_buy_threshold and price_up <= 0.95:
                 self.order = {"time_stamp": str(datetime.now().timestamp()),
                     "direction": "UP",
                     "entry_price": price_up
                 }
                 logger.info(f"买入UP: ${price_up:.4f}")
-            elif price_down <= self.settings.no_buy_threshold:
+            elif price_down >= self.settings.no_buy_threshold and price_down <= 0.95:
                 self.order = {"time_stamp": str(datetime.now().timestamp()),
                     "direction": "DOWN",
                     "entry_price": price_down
@@ -611,9 +628,9 @@ class SimpleArbitrageBot:
                 if self.is_performed:
                     continue
 
-                if self.get_strategy_remaining() == "CLOSED":
+                if self.get_strategy_remaining_to_start() == "CLOSED":
                     if not self.is_performed_informed:
-                        logger.info("超过2分钟，等待下一个市场")
+                        logger.info("策略窗口还没到。。。")
                         self.is_performed_informed = True
                     continue
 
