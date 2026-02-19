@@ -556,18 +556,47 @@ class SimpleArbitrageBot:
         price_up, price_down, size_up, size_down, best_up, best_down = self.get_current_prices()
         if price_up >= self.settings.yes_buy_threshold and price_up <= 0.95 or price_down >= self.settings.no_buy_threshold and price_down <= 0.95:
             # Perform Buy
+            orders = []
             if price_up >= self.settings.yes_buy_threshold and price_up <= 0.95:
                 self.order = {"time_stamp": str(datetime.now().timestamp()),
                     "direction": "UP",
                     "entry_price": price_up
                 }
+                orders.append({
+                    "side": "BUY",
+                    "token_id": self.yes_token_id,
+                    "price": round(price_up, 2),
+                    "size": self.settings.order_size
+                })
                 logger.info(f"买入UP: ${price_up:.4f}")
             elif price_down >= self.settings.no_buy_threshold and price_down <= 0.95:
                 self.order = {"time_stamp": str(datetime.now().timestamp()),
                     "direction": "DOWN",
                     "entry_price": price_down
                 }
+                orders.append({
+                    "side": "BUY",
+                    "token_id": self.no_token_id,
+                    "price": round(price_down, 2),
+                    "size": self.settings.order_size
+                })
                 logger.info(f"买入DOWN: ${price_down:.4f}")
+            
+            if not self.settings.dry_run:
+                results = place_orders_fast(self.settings, orders)
+                print(results)
+                errors = [r for r in results if isinstance(r, dict) and "error" in r]
+                if errors:
+                    for err in errors:
+                        error_msg = f"❌ 订单错误: {err['error']}"
+                        logger.error(error_msg)
+                        with open("error.txt", "a") as f:
+                            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                            f.write(f"[{timestamp}] {error_msg}\n")
+                            f.write(f"Full error details: {err}\n\n")
+                    raise RuntimeError(f"Some orders failed: {errors}")
+                    return False
+                logger.info(f"✅ 订单已执行")
             self.is_performed = True
             return True
         else:
@@ -649,7 +678,7 @@ class SimpleArbitrageBot:
                 if not self.settings.dry_run:
                     logger.info(f"执行的交易: {self.trades_executed}")
                 
-                logger.info(f"等待 {interval_seconds}秒...\n")
+                # logger.info(f"等待 {interval_seconds}秒...\n")
                 await asyncio.sleep(interval_seconds)
                 
         except KeyboardInterrupt:
