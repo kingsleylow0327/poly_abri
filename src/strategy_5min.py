@@ -11,6 +11,7 @@ import re
 import sys
 import csv
 import os
+import math
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Tuple, List
 
@@ -18,7 +19,7 @@ import httpx
 
 from config import load_settings
 from market_lookup import fetch_market_from_slug
-from trading_client import get_client, place_order, get_positions, place_orders_fast
+from trading_client import get_client, place_order, get_positions, place_orders_fast, place_orders_market
 from py_clob_client.clob_types import BookParams
 
 logging.basicConfig(
@@ -556,47 +557,63 @@ class SimpleArbitrageBot:
         price_up, price_down, size_up, size_down, best_up, best_down = self.get_current_prices()
         if price_up >= self.settings.yes_buy_threshold and price_up <= 0.95 or price_down >= self.settings.no_buy_threshold and price_down <= 0.95:
             # Perform Buy
-            orders = []
+            order = None
             if price_up >= self.settings.yes_buy_threshold and price_up <= 0.95:
                 self.order = {"time_stamp": str(datetime.now().timestamp()),
                     "direction": "UP",
-                    "entry_price": price_up
+                    "entry_price": best_up
                 }
-                orders.append({
+                order = {
                     "side": "BUY",
                     "token_id": self.yes_token_id,
-                    "price": round(price_up, 2),
+                    "price": round(best_up, 2),
                     "size": self.settings.order_size
-                })
-                logger.info(f"买入UP: ${price_up:.4f}")
+                }
+                logger.info(f"买入UP: ${best_up:.4f}")
             elif price_down >= self.settings.no_buy_threshold and price_down <= 0.95:
                 self.order = {"time_stamp": str(datetime.now().timestamp()),
                     "direction": "DOWN",
-                    "entry_price": price_down
+                    "entry_price": best_down
                 }
-                orders.append({
+                order = {
                     "side": "BUY",
                     "token_id": self.no_token_id,
-                    "price": round(price_down, 2),
+                    "price": round(best_down, 2),
                     "size": self.settings.order_size
-                })
-                logger.info(f"买入DOWN: ${price_down:.4f}")
+                }
+                logger.info(f"买入DOWN: ${best_down:.4f}")
+            
+            if order is None:
+                logger.error("Order is None")
+                return False
+            
+            if order.get("price") * order.get("size") < 1:
+                price_cents = int(round(order["price"] * 100))
+                min_s = math.ceil(10000 / price_cents)
+                found = False
+                for s in range(min_s, min_s + 200):
+                    if (s * price_cents) % 100 == 0:
+                        order["size"] = s / 100
+                        found = True
+                        break
+                if not found:
+                    order["size"] = float(math.ceil(1.0 / order["price"]))
+                logger.info(f"Order size adjusted to {order['size']} (cost: ${order['size'] * order['price']:.2f})")
             
             if not self.settings.dry_run:
-                results = place_orders_fast(self.settings, orders)
-                print(results)
-                errors = [r for r in results if isinstance(r, dict) and "error" in r]
+                results = place_orders_market(self.settings, order)
+                errors = [r for r in results if isinstance(r, dict) and r.get("errorMsg")]
                 if errors:
                     for err in errors:
-                        error_msg = f"❌ 订单错误: {err['error']}"
+                        error_msg = f"❌ 订单错误: {err.get('errorMsg', err)}"
                         logger.error(error_msg)
                         with open("error.txt", "a") as f:
                             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                             f.write(f"[{timestamp}] {error_msg}\n")
                             f.write(f"Full error details: {err}\n\n")
-                    raise RuntimeError(f"Some orders failed: {errors}")
                     return False
-                logger.info(f"✅ 订单已执行")
+                else:
+                    logger.info(f"✅ 订单已执行")
             self.is_performed = True
             return True
         else:
