@@ -135,6 +135,24 @@ def place_orders_fast(settings: Settings, orders: list[dict]) -> list[dict]:
     except Exception as exc:
         return [{"error": str(exc)}]
 
+def place_orders_market(settings: Settings, orders: dict) -> list[dict]:
+    client = get_client(settings)
+
+    post_args: list[PostOrdersArgs] = []
+    side_up = orders["side"].upper()
+    order_args = OrderArgs(
+        token_id=orders["token_id"],
+        price=orders["price"],
+        size=orders["size"],
+        side=BUY if side_up == "BUY" else SELL
+    )
+    signed_order = client.create_order(order_args)
+    post_args.append(PostOrdersArgs(order=signed_order, orderType=OrderType.FOK))
+
+    try:
+        return client.post_orders(post_args)
+    except Exception as exc:
+        return [{"error": str(exc)}]
 
 def get_positions(settings: Settings, token_ids: list[str] = None) -> dict:
     try:
