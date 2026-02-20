@@ -32,6 +32,7 @@ class Settings:
     max_trades_per_market: int = int(os.getenv("MAX_TRADES_PER_MARKET", "0"))
     min_time_remaining_minutes: int = int(os.getenv("MIN_TIME_REMAINING_MINUTES", "0"))
     strategy_start_timestamp: int = int(os.getenv("STRATEGY_START_TIMESTAMP", "0"))
+    stoploss: float = float(os.getenv("STOPLOSS", "0.1"))
 
 
 def load_settings() -> Settings:

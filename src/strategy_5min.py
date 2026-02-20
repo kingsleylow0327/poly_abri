@@ -86,6 +86,7 @@ class SimpleArbitrageBot:
         self.client = get_client(settings)
         self.is_performed = False
         self.is_performed_informed = False
+        self.is_finished = False
         self.order = None
 
         # 尝试自动查找当前的 5分钟市场
@@ -220,7 +221,6 @@ class SimpleArbitrageBot:
                 size_down = orderbook_down.get("ask_size", 0)
                 best_up = orderbook_up.get("best_ask", 0)
                 best_down = orderbook_down.get("best_ask", 0)
-                logger.info(f'Up Price: {price_up:.4f}, Down Price: {price_down:.4f}')
                 return price_up, price_down, size_up, size_down, best_up, best_down
             except Exception as e:
                 logger.error(f"获取价格时出错 (attempt {attempt}/{max_retries}): {e}")
@@ -532,7 +532,8 @@ class SimpleArbitrageBot:
             self.order.get("entry_price"),
             self.order.get("order_size"),
             f"{self.order.get("cost"):.2f}",
-            f"{self.order.get("order_size") * (1 - self.order.get("entry_price")):.2f}" if result == self.order.get("direction") else f"{-self.order.get("cost"):.4f}"
+            f"{self.order.get("stoploss_price", 0):.2f}",
+            f"{self.order.get("order_size") * (1 - self.order.get("entry_price")):.2f}" if self.order.get("stoploss_price") is None else f"{self.order.get("order_size") * ((self.order.get("stoploss_price") - self.order.get("entry_price"))):.2f}"
         ]
         # Write to CSV
         csv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'result.csv')
@@ -557,6 +558,7 @@ class SimpleArbitrageBot:
             return False  # 发出停止机器人的信号
 
         price_up, price_down, size_up, size_down, best_up, best_down = self.get_current_prices()
+        logger.info(f'Up Price: {price_up:.2f}, Down Price: {price_down:.2f}')
         if price_up >= self.settings.yes_buy_threshold and price_up <= 0.95 or price_down >= self.settings.no_buy_threshold and price_down <= 0.95:
             # Perform Buy
             order = None
@@ -658,6 +660,7 @@ class SimpleArbitrageBot:
                     self.show_final_summary()
                     self.is_performed = False
                     self.is_performed_informed = False
+                    self.is_finished = False
                     self.order = None
                     
                     # 搜索下一个市场
@@ -681,7 +684,19 @@ class SimpleArbitrageBot:
                         await asyncio.sleep(30)
                         continue
                 
+                if self.is_finished:
+                    continue
+                
                 if self.is_performed:
+                    # Stoploss here
+                    price_up, price_down, size_up, size_down, best_up, best_down = self.get_current_prices()
+                    # Check current order direction
+                    stoploss_price = best_up if self.order.get("direction") == "UP" else best_down
+                    if self.order.get("entry_price") - stoploss_price >= self.settings.stoploss:
+                        # Market Out here
+                        self.order["stoploss_price"] = stoploss_price
+                        logger.info("Stoploss triggered !!!")
+                        self.is_finished = True
                     continue
 
                 if self.get_strategy_remaining_to_start() == "CLOSED":
