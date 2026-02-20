@@ -530,7 +530,9 @@ class SimpleArbitrageBot:
         data = [formatted_str,
             self.order.get("direction"),
             self.order.get("entry_price"),
-            f"{(1 - self.order.get("entry_price")):.2f}" if result == self.order.get("direction") else f"{-self.order.get("entry_price"):.4f}"
+            self.order.get("order_size"),
+            self.order.get("cost"),
+            f"{self.order.get("order_size") * (1 - self.order.get("entry_price")):.2f}" if result == self.order.get("direction") else f"{-self.order.get("cost"):.4f}"
         ]
         # Write to CSV
         csv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'result.csv')
@@ -561,7 +563,7 @@ class SimpleArbitrageBot:
             if price_up >= self.settings.yes_buy_threshold and price_up <= 0.95:
                 self.order = {"time_stamp": str(datetime.now().timestamp()),
                     "direction": "UP",
-                    "entry_price": best_up
+                    "entry_price": best_up,
                 }
                 order = {
                     "side": "BUY",
@@ -587,6 +589,7 @@ class SimpleArbitrageBot:
                 logger.error("Order is None")
                 return False
             
+            self.order["order_size"] = self.settings.order_size
             if order.get("price") * order.get("size") < 1:
                 price_cents = int(round(order["price"] * 100))
                 min_s = math.ceil(10000 / price_cents)
@@ -598,8 +601,10 @@ class SimpleArbitrageBot:
                         break
                 if not found:
                     order["size"] = float(math.ceil(1.0 / order["price"]))
+                self.order["order_size"] = order["size"]
                 logger.info(f"Order size adjusted to {order['size']} (cost: ${order['size'] * order['price']:.2f})")
             
+            self.order["cost"] = order["size"] * order["price"]
             if not self.settings.dry_run:
                 results = place_orders_market(self.settings, order)
                 errors = [r for r in results if isinstance(r, dict) and r.get("errorMsg")]
