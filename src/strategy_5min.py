@@ -692,6 +692,8 @@ class SimpleArbitrageBot:
                     price_up, price_down, size_up, size_down, best_up, best_down = self.get_current_prices()
                     # Check current order direction
                     stoploss_price = best_up if self.order.get("direction") == "UP" else best_down
+                    if stoploss_price is None:
+                        continue
                     if self.order.get("entry_price") - stoploss_price >= self.settings.stoploss:
                         # Market Out here
                         self.order["stoploss_price"] = stoploss_price
