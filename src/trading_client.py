@@ -1,12 +1,13 @@
-import functools
 import logging
+
+from dto.order_dto import OrderDto
 from typing import Optional
 
 from py_clob_client.client import ClobClient
 from py_clob_client.clob_types import BalanceAllowanceParams, AssetType, OrderArgs, OrderType, PostOrdersArgs
 from py_clob_client.order_builder.constants import BUY, SELL
 
-from config import Settings
+from src.config import Settings
 
 logger = logging.getLogger(__name__)
 
@@ -153,6 +154,18 @@ def place_orders_market(settings: Settings, orders: dict) -> list[dict]:
         return client.post_orders(post_args)
     except Exception as exc:
         return [{"error": str(exc)}]
+
+def execute_market_buy(settings: Settings, order_dto: OrderDto) -> list[dict]:
+    order = order_dto.to_dict()
+    order["side"] = "BUY"
+    return place_orders_market(settings, order)
+    
+
+def execute_market_sell(settings: Settings, order_dto: OrderDto) -> list[dict]:
+    order = order_dto.to_dict()
+    order["side"] = "SELL"
+    return place_orders_market(settings, order)
+
 
 def get_positions(settings: Settings, token_ids: list[str] = None) -> dict:
     try:

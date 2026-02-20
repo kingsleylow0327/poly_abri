@@ -17,9 +17,10 @@ from typing import Optional, Tuple, List
 
 import httpx
 
-from config import load_settings
-from market_lookup import fetch_market_from_slug
-from trading_client import get_client, place_order, get_positions, place_orders_fast, place_orders_market
+from src.config import load_settings
+from dto.order_dto import OrderDto
+from src.market_lookup import fetch_market_from_slug
+from src.trading_client import get_client, get_balance, get_positions, place_orders_fast, execute_market_buy
 from py_clob_client.clob_types import BookParams
 
 logging.basicConfig(
@@ -183,7 +184,6 @@ class SimpleArbitrageBot:
 
     def get_balance(self) -> float:
         """获取当前 USDC 余额。"""
-        from trading_client import get_balance
         return get_balance(self.settings)
 
     def get_current_prices(self) -> tuple[float, float, int, int, float, float] | tuple[None, None, None, None,None,None]:
@@ -531,7 +531,7 @@ class SimpleArbitrageBot:
             self.order.get("direction"),
             self.order.get("entry_price"),
             self.order.get("order_size"),
-            self.order.get("cost"),
+            f"{self.order.get("cost"):.2f}",
             f"{self.order.get("order_size") * (1 - self.order.get("entry_price")):.2f}" if result == self.order.get("direction") else f"{-self.order.get("cost"):.4f}"
         ]
         # Write to CSV
@@ -565,24 +565,22 @@ class SimpleArbitrageBot:
                     "direction": "UP",
                     "entry_price": best_up,
                 }
-                order = {
-                    "side": "BUY",
-                    "token_id": self.yes_token_id,
-                    "price": round(best_up, 2),
-                    "size": self.settings.order_size
-                }
+                order = OrderDto(
+                    token_id=self.yes_token_id,
+                    price=best_up,
+                    size=self.settings.order_size
+                )
                 logger.info(f"买入UP: ${best_up:.4f}")
             elif price_down >= self.settings.no_buy_threshold and price_down <= 0.95:
                 self.order = {"time_stamp": str(datetime.now().timestamp()),
                     "direction": "DOWN",
                     "entry_price": best_down
                 }
-                order = {
-                    "side": "BUY",
-                    "token_id": self.no_token_id,
-                    "price": round(best_down, 2),
-                    "size": self.settings.order_size
-                }
+                order = OrderDto(
+                    token_id=self.no_token_id,
+                    price=best_down,
+                    size=self.settings.order_size
+                )
                 logger.info(f"买入DOWN: ${best_down:.4f}")
             
             if order is None:
@@ -590,23 +588,23 @@ class SimpleArbitrageBot:
                 return False
             
             self.order["order_size"] = self.settings.order_size
-            if order.get("price") * order.get("size") < 1:
-                price_cents = int(round(order["price"] * 100))
+            if order.price * order.size < 1:
+                price_cents = int(round(order.price * 100))
                 min_s = math.ceil(10000 / price_cents)
                 found = False
                 for s in range(min_s, min_s + 200):
                     if (s * price_cents) % 100 == 0:
-                        order["size"] = s / 100
+                        order.size = s / 100
                         found = True
                         break
                 if not found:
-                    order["size"] = float(math.ceil(1.0 / order["price"]))
-                self.order["order_size"] = order["size"]
-                logger.info(f"Order size adjusted to {order['size']} (cost: ${order['size'] * order['price']:.2f})")
+                    order.size = float(math.ceil(1.0 / order.price))
+                self.order["order_size"] = order.size
+                logger.info(f"Order size adjusted to {order.size} (cost: ${order.size * order.price:.2f})")
             
-            self.order["cost"] = order["size"] * order["price"]
+            self.order["cost"] = order.size * order.price
             if not self.settings.dry_run:
-                results = place_orders_market(self.settings, order)
+                results = execute_market_buy(self.settings, order)
                 errors = [r for r in results if isinstance(r, dict) and r.get("errorMsg")]
                 if errors:
                     for err in errors:
@@ -697,9 +695,6 @@ class SimpleArbitrageBot:
                 
                 self.run_once()
                 
-                if not self.settings.dry_run:
-                    logger.info(f"执行的交易: {self.trades_executed}")
-                
                 # logger.info(f"等待 {interval_seconds}秒...\n")
                 await asyncio.sleep(interval_seconds)
                 
@@ -708,12 +703,10 @@ class SimpleArbitrageBot:
             logger.info("🛑 机器人已被用户停止")
             logger.info(f"总扫描次数: {scan_count}")
             logger.info(f"发现的机会: {self.opportunities_found}")
-            if not self.settings.dry_run:
-                logger.info(f"执行的交易: {self.trades_executed}")
             logger.info("=" * 70)
 
 
-async def main(symbol: str):
+async def strategy(symbol: str):
     """主入口点。"""
     
     # 加载配置
@@ -740,4 +733,4 @@ if __name__ == "__main__":
     
     symbol = sys.argv[1].lower()
     # symbol = "btc"
-    asyncio.run(main(symbol))
+    asyncio.run(strategy(symbol))
