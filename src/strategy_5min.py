@@ -533,6 +533,7 @@ class SimpleArbitrageBot:
             self.order.get("order_size"),
             f"{self.order.get("cost"):.2f}",
             f"{self.order.get("stoploss_price", 0):.2f}",
+            result,
             f"{self.order.get("order_size") * (1 - self.order.get("entry_price")):.2f}" if self.order.get("stoploss_price") is None else f"{self.order.get("order_size") * ((self.order.get("stoploss_price") - self.order.get("entry_price"))):.2f}"
         ]
         # Write to CSV
