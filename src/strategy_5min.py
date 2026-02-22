@@ -564,6 +564,8 @@ class SimpleArbitrageBot:
             # Perform Buy
             order = None
             if price_up >= self.settings.yes_buy_threshold and price_up <= 0.95:
+                if best_up is None:
+                    return False
                 self.order = {"time_stamp": str(datetime.now().timestamp()),
                     "direction": "UP",
                     "entry_price": best_up,
@@ -575,6 +577,8 @@ class SimpleArbitrageBot:
                 )
                 logger.info(f"买入UP: ${best_up:.4f}")
             elif price_down >= self.settings.no_buy_threshold and price_down <= 0.95:
+                if best_down is None:
+                    return False
                 self.order = {"time_stamp": str(datetime.now().timestamp()),
                     "direction": "DOWN",
                     "entry_price": best_down
