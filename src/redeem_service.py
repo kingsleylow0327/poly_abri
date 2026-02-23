@@ -19,7 +19,7 @@ RPC_URLS = [
     "https://rpc-mainnet.maticvigil.com",
 ]
 
-def connect_to_polygon():
+def connect_to_polygon() -> Web3:
     for url in RPC_URLS:
         logger.info(f"Trying to connect to {url}...")
         w3 = Web3(Web3.HTTPProvider(url, request_kwargs={'timeout': 30}))
@@ -40,12 +40,14 @@ def get_redeemable_positions(settings: Settings):
     try:
         res = requests.get(url)
         res.raise_for_status()
-        return res.json()
+        res_json = res.json()
+        logger.info(f"✅ Fetched {len(res_json)} redeemable position(s)")
+        return res_json
     except Exception as e:
         logger.info(f"Could not fetch positions: {e}")
         return []
 
-def redeem_via_proxy(settings: Settings, condition_id):
+def redeem_via_proxy(settings: Settings, w3: Web3, condition_id):
     ctf_abi = [{"name":"redeemPositions","type":"function","inputs":[
         {"name":"collateralToken","type":"address"},{"name":"parentCollectionId","type":"bytes32"},
         {"name":"conditionId","type":"bytes32"},{"name":"indexSets","type":"uint256[]"}

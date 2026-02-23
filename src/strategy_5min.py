@@ -660,12 +660,12 @@ class SimpleArbitrageBot:
 
         # Redeem redeemable positions
         logger.info(f"开始赎回仓位...")
-        redeem_service.connect_to_polygon()
+        w3 = redeem_service.connect_to_polygon()
         redeemable_positions = redeem_service.get_redeemable_positions(self.settings)
         for position in redeemable_positions:
             condition_id = position.get('conditionId')
             if condition_id:
-                redeem_service.redeem_via_proxy(self.settings, condition_id)
+                redeem_service.redeem_via_proxy(self.settings, w3, condition_id)
         logger.info(f"✅ 赎回仓位完成")
 
         try:
@@ -681,10 +681,12 @@ class SimpleArbitrageBot:
 
                     # Redeem redeemable positions
                     logger.info(f"开始赎回仓位...")
-                    redeem_service.connect_to_polygon()
+                    if not w3 or not w3.is_connected():
+                        logger.warning("Connection lost. Reconnecting before redemption...")
+                        w3 = redeem_service.connect_to_polygon()
                     redeemable_positions = redeem_service.get_redeemable_positions(self.settings)
                     for position in redeemable_positions:
-                        redeem_service.redeem_via_proxy(self.settings, position['condition_id'])
+                        redeem_service.redeem_via_proxy(self.settings, w3, position['condition_id'])
                     logger.info(f"✅ 赎回仓位完成")
                     
                     # 搜索下一个市场
