@@ -21,7 +21,7 @@ import httpx
 from src.config import load_settings
 from dto.order_dto import OrderDto
 from src.market_lookup import fetch_market_from_slug
-from src.trading_client import get_client, get_balance, get_positions, place_orders_fast, execute_market_buy
+from src.trading_client import get_client, get_balance, get_positions, place_orders_fast, execute_market_buy, execute_market_sell
 from py_clob_client.clob_types import BookParams
 
 logging.basicConfig(
@@ -709,18 +709,20 @@ class SimpleArbitrageBot:
                 if self.is_finished:
                     continue
                 
-                if self.is_performed and self.settings.stoploss > 0:
+                if self.is_performed:
                     # Stoploss here
-                    price_up, price_down, size_up, size_down, best_up, best_down = self.get_current_prices()
-                    # Check current order direction
-                    stoploss_price = price_up if self.order.get("direction") == "UP" else price_down
-                    if stoploss_price is None:
-                        continue
-                    if self.order.get("entry_price") - stoploss_price >= self.settings.stoploss:
-                        # Market Out here
-                        self.order["stoploss_price"] = stoploss_price
-                        logger.info("Stoploss triggered !!!")
-                        self.is_finished = True
+                    if self.settings.stoploss > 0:
+                        price_up, price_down, size_up, size_down, best_up, best_down = self.get_current_prices()
+                        # Check current order direction
+                        stoploss_price = price_up if self.order.get("direction") == "UP" else price_down
+                        if stoploss_price is None:
+                            continue
+                        # execute_market_sell(self.settings, self.order)
+                        if self.order.get("entry_price") - stoploss_price >= self.settings.stoploss:
+                            # Market Out here
+                            self.order["stoploss_price"] = stoploss_price
+                            logger.info("Stoploss triggered !!!")
+                            self.is_finished = True
                     continue
 
                 if self.get_strategy_remaining_to_start() == "CLOSED":
