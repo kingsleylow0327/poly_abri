@@ -36,7 +36,7 @@ def connect_to_polygon():
 
 def get_redeemable_positions(settings: Settings):
     """Checks Polymarket API for finished winning markets"""
-    url = f"https://data-api.polymarket.com/positions?user={settings.proxy_address}&redeemable=true"
+    url = f"https://data-api.polymarket.com/positions?user={settings.funder}&redeemable=true"
     try:
         res = requests.get(url)
         res.raise_for_status()
@@ -78,7 +78,7 @@ def redeem_via_proxy(settings: Settings, condition_id):
             ]
         }
     ]  
-    proxy_contract = w3.eth.contract(address=settings.proxy_address, abi=proxy_abi)
+    proxy_contract = w3.eth.contract(address=settings.funder, abi=proxy_abi)
 
     signature = "0x000000000000000000000000" + settings.metamask_address[2:].lower() + "0000000000000000000000000000000000000000000000000000000000000000" + "01"
 
