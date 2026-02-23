@@ -12,6 +12,7 @@ import sys
 import csv
 import os
 import math
+import src.redeem_service as redeem_service
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Tuple, List
 
@@ -656,7 +657,15 @@ class SimpleArbitrageBot:
         logger.info("")
         
         scan_count = 0
-        
+
+        # Redeem redeemable positions
+        logger.info(f"开始赎回仓位...")
+        redeem_service.connect_to_polygon()
+        redeemable_positions = redeem_service.get_redeemable_positions(self.settings)
+        for position in redeemable_positions:
+            redeem_service.redeem_via_proxy(self.settings, position['condition_id'])
+        logger.info(f"✅ 赎回仓位完成")
+
         try:
             while True:
                 # 检查市场是否关闭
@@ -692,7 +701,7 @@ class SimpleArbitrageBot:
                 if self.is_finished:
                     continue
                 
-                if self.is_performed:
+                if self.is_performed and self.settings.stoploss > 0:
                     # Stoploss here
                     price_up, price_down, size_up, size_down, best_up, best_down = self.get_current_prices()
                     # Check current order direction

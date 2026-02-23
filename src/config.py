@@ -14,6 +14,7 @@ class Settings:
     api_passphrase: str = os.getenv("POLYMARKET_API_PASSPHRASE", "")
     private_key: str = os.getenv("POLYMARKET_PRIVATE_KEY", "")
     signature_type: int = int(os.getenv("POLYMARKET_SIGNATURE_TYPE", "1"))
+    metamask_address: str = os.getenv("METAMASK_ADDRESS", "")
     funder: str = os.getenv("POLYMARKET_FUNDER", "")
     market_slug: str = os.getenv("POLYMARKET_MARKET_SLUG", "")
     market_id: str = os.getenv("POLYMARKET_MARKET_ID", "")
@@ -32,7 +33,9 @@ class Settings:
     max_trades_per_market: int = int(os.getenv("MAX_TRADES_PER_MARKET", "0"))
     min_time_remaining_minutes: int = int(os.getenv("MIN_TIME_REMAINING_MINUTES", "0"))
     strategy_start_timestamp: int = int(os.getenv("STRATEGY_START_TIMESTAMP", "0"))
-    stoploss: float = float(os.getenv("STOPLOSS", "0.1"))
+    stoploss: float = float(os.getenv("STOPLOSS", "0"))
+    ctf_address: str = os.getenv("CTF_ADDRESS", "")
+    usdc_address: str = os.getenv("USDC_ADDRESS", "")
 
 
 def load_settings() -> Settings:
