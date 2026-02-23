@@ -520,7 +520,10 @@ class SimpleArbitrageBot:
         # Get market result
         result = self.get_market_result()
         if result:
-            logger.info(f"结果: {'😑 No Chance' if self.order is None else ('🤑 WIN' if result == self.order.get("direction") else '😭 LOSS')} (Bet: {self.order.get("direction")}, Result: {result})")
+            message = '😑 No Chance'
+            if self.order:
+                message = f"{'🤑 WIN' if result == self.order.get('direction') else '😭 LOSS'} (Bet: {self.order.get("direction")}, Result: {result})"
+            logger.info(f"结果: {message}")
         
         # Write to CSV
         if self.order is None:
