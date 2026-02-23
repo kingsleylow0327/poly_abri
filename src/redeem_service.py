@@ -13,10 +13,10 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 RPC_URLS = [
-    "https://1rpc.io/matic",
+    "https://polygon-bor.publicnode.com", # Server Best
+    "https://1rpc.io/matic", # Local Best
     "https://polygon-rpc.com",
     "https://rpc-mainnet.maticvigil.com",
-    "https://polygon-bor.publicnode.com"
 ]
 
 def connect_to_polygon():
