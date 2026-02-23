@@ -676,6 +676,14 @@ class SimpleArbitrageBot:
                     self.is_performed_informed = False
                     self.is_finished = False
                     self.order = None
+
+                    # Redeem redeemable positions
+                    logger.info(f"开始赎回仓位...")
+                    redeem_service.connect_to_polygon()
+                    redeemable_positions = redeem_service.get_redeemable_positions(self.settings)
+                    for position in redeemable_positions:
+                        redeem_service.redeem_via_proxy(self.settings, position['condition_id'])
+                    logger.info(f"✅ 赎回仓位完成")
                     
                     # 搜索下一个市场
                     logger.info(f"\n🔄 正在搜索下一个 {symbol} 5分钟市场...")
