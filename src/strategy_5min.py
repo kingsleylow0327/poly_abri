@@ -688,7 +688,9 @@ class SimpleArbitrageBot:
                         w3 = redeem_service.connect_to_polygon()
                     redeemable_positions = redeem_service.get_redeemable_positions(self.settings)
                     for position in redeemable_positions:
-                        redeem_service.redeem_via_proxy(self.settings, w3, position['condition_id'])
+                        condition_id = position.get('conditionId')
+                        if condition_id:
+                            redeem_service.redeem_via_proxy(self.settings, w3, condition_id)
                     logger.info(f"✅ 赎回仓位完成")
                     
                     # 搜索下一个市场
