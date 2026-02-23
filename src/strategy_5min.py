@@ -654,7 +654,6 @@ class SimpleArbitrageBot:
         if self.settings.min_time_remaining_minutes > 0:
             logger.info(f"最小剩余时间要求: {self.settings.min_time_remaining_minutes} 分钟")
         logger.info("=" * 70)
-        logger.info("")
         
         scan_count = 0
 
