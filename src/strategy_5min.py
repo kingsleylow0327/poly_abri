@@ -88,6 +88,7 @@ class SimpleArbitrageBot:
         self.is_performed = False
         self.is_performed_informed = False
         self.is_finished = False
+        self.is_started = False
         self.order = None
 
         # 尝试自动查找当前的 5分钟市场
@@ -561,11 +562,11 @@ class SimpleArbitrageBot:
         strategy_remaining_to_start = self.get_strategy_remaining_to_start()
         if strategy_remaining_to_start == "CLOSED":
             return False  # 发出停止机器人的信号
-
         price_up, price_down, size_up, size_down, best_up, best_down = self.get_current_prices()
-        logger.info(f'Up Price: {price_up:.2f}, Down Price: {price_down:.2f}')
+        logger.debug(f'Up Price: {price_up:.2f}, Down Price: {price_down:.2f}')
         if price_up >= self.settings.yes_buy_threshold and price_up <= 0.95 or price_down >= self.settings.no_buy_threshold and price_down <= 0.95:
             # Perform Buy
+            # To-do: Buy first then record, would be cannot buy
             order = None
             if price_up >= self.settings.yes_buy_threshold and price_up <= 0.95:
                 if best_up is None:
@@ -680,6 +681,7 @@ class SimpleArbitrageBot:
                     self.is_performed = False
                     self.is_performed_informed = False
                     self.is_finished = False
+                    self.is_started = False
                     self.order = None
 
                     # Redeem redeemable positions
@@ -740,6 +742,9 @@ class SimpleArbitrageBot:
                         self.is_performed_informed = True
                     continue
 
+                if not self.is_started:
+                    self.is_started = True
+                    logger.info("策略窗口开始！！！")
                 scan_count += 1
                 logger.debug(f"\n[Scan #{scan_count} {symbol.upper()}] {datetime.now().strftime('%H:%M:%S')}")
                 
