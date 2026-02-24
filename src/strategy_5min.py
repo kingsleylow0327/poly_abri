@@ -538,7 +538,7 @@ class SimpleArbitrageBot:
         if self.order.get("stoploss_price") and self.order.get("stoploss_price") > 0 :
             pnl = f"{self.order.get("order_size") * ((self.order.get("stoploss_price") - self.order.get("entry_price"))):.2f}"
         # Loss
-        elif self.order.get("direction") == result:
+        elif self.order.get("direction") != result:
             pnl = f"{(-self.order.get("order_size") * self.order.get("entry_price")):.2f}"
         data = [formatted_str,
             self.order.get("direction"),
