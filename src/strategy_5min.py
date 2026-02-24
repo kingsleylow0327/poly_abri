@@ -532,6 +532,14 @@ class SimpleArbitrageBot:
         tz_plus_8 = timezone(timedelta(hours=8))
         dt_obj = datetime.fromtimestamp(float(self.order.get("time_stamp")), tz=tz_plus_8)
         formatted_str = dt_obj.strftime("%Y-%m-%d %H:%M:%S")
+        # Win
+        pnl = f"{self.order.get("order_size") * (1 - self.order.get("entry_price")):.2f}"
+        # Stoploss
+        if self.order.get("stoploss_price") > 0 :
+            pnl = f"{self.order.get("order_size") * ((self.order.get("stoploss_price") - self.order.get("entry_price"))):.2f}"
+        # Loss
+        elif self.order.get("direction") == result:
+            pnl = f"{(-self.order.get("order_size") * self.order.get("entry_price")):.2f}"
         data = [formatted_str,
             self.order.get("direction"),
             self.order.get("entry_price"),
@@ -539,7 +547,7 @@ class SimpleArbitrageBot:
             f"{self.order.get("cost"):.2f}",
             f"{self.order.get("stoploss_price", 0):.2f}",
             result,
-            f"{self.order.get("order_size") * (1 - self.order.get("entry_price")):.2f}" if self.order.get("stoploss_price") is None else f"{self.order.get("order_size") * ((self.order.get("stoploss_price") - self.order.get("entry_price"))):.2f}"
+            pnl
         ]
         # Write to CSV
         csv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'result.csv')
