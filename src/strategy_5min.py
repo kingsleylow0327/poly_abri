@@ -579,7 +579,7 @@ class SimpleArbitrageBot:
                     price=best_up,
                     size=self.settings.order_size
                 )
-                logger.info(f"买入UP: ${best_up:.4f}")
+                logger.info(f"买入UP: ${best_up:.2f}")
             elif price_down >= self.settings.no_buy_threshold and price_down <= 0.95:
                 if best_down is None:
                     return False
@@ -592,7 +592,7 @@ class SimpleArbitrageBot:
                     price=best_down,
                     size=self.settings.order_size
                 )
-                logger.info(f"买入DOWN: ${best_down:.4f}")
+                logger.info(f"买入DOWN: ${best_down:.2f}")
             
             if order is None:
                 logger.error("Order is None")
@@ -615,6 +615,7 @@ class SimpleArbitrageBot:
             
             self.order["cost"] = order.size * order.price
             if not self.settings.dry_run:
+                logger.info(f"执行订单: Price {order.price}, Size {order.size}")
                 results = execute_market_buy(self.settings, order)
                 errors = [r for r in results if isinstance(r, dict) and r.get("errorMsg")]
                 if errors:
@@ -631,7 +632,7 @@ class SimpleArbitrageBot:
             self.is_performed = True
             return True
         else:
-            logger.info(
+            logger.debug(
                 f"无套利机会: UP=${price_up:.4f} ({size_up:.0f}) , DOWN=${price_down:.4f} ({size_down:.0f}) "
                 f"[剩余时间: {time_remaining}]"
             )
@@ -740,7 +741,7 @@ class SimpleArbitrageBot:
                     continue
 
                 scan_count += 1
-                logger.info(f"\n[Scan #{scan_count} {symbol.upper()}] {datetime.now().strftime('%H:%M:%S')}")
+                logger.debug(f"\n[Scan #{scan_count} {symbol.upper()}] {datetime.now().strftime('%H:%M:%S')}")
                 
                 self.run_once()
                 
