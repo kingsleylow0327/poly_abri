@@ -671,14 +671,15 @@ class SimpleArbitrageBot:
         scan_count = 0
 
         # Redeem redeemable positions
-        logger.info(f"开始赎回仓位...")
-        w3 = redeem_service.connect_to_polygon()
-        redeemable_positions = redeem_service.get_redeemable_positions(self.settings)
-        for position in redeemable_positions:
-            condition_id = position.get('conditionId')
-            if condition_id:
-                redeem_service.redeem_via_proxy(self.settings, w3, condition_id)
-        logger.info(f"✅ 赎回仓位完成")
+        if not self.settings.dry_run:
+            logger.info(f"开始赎回仓位...")
+            w3 = redeem_service.connect_to_polygon()
+            redeemable_positions = redeem_service.get_redeemable_positions(self.settings)
+            for position in redeemable_positions:
+                condition_id = position.get('conditionId')
+                if condition_id:
+                    redeem_service.redeem_via_proxy(self.settings, w3, condition_id)
+            logger.info(f"✅ 赎回仓位完成")
 
         try:
             while True:
@@ -693,16 +694,17 @@ class SimpleArbitrageBot:
                     self.order = None
 
                     # Redeem redeemable positions
-                    logger.info(f"开始赎回仓位...")
-                    if not w3 or not w3.is_connected():
-                        logger.warning("Connection lost. Reconnecting before redemption...")
-                        w3 = redeem_service.connect_to_polygon()
-                    redeemable_positions = redeem_service.get_redeemable_positions(self.settings)
-                    for position in redeemable_positions:
-                        condition_id = position.get('conditionId')
-                        if condition_id:
-                            redeem_service.redeem_via_proxy(self.settings, w3, condition_id)
-                    logger.info(f"✅ 赎回仓位完成")
+                    if not self.settings.dry_run:
+                        logger.info(f"开始赎回仓位...")
+                        if not w3 or not w3.is_connected():
+                            logger.warning("Connection lost. Reconnecting before redemption...")
+                            w3 = redeem_service.connect_to_polygon()
+                        redeemable_positions = redeem_service.get_redeemable_positions(self.settings)
+                        for position in redeemable_positions:
+                            condition_id = position.get('conditionId')
+                            if condition_id:
+                                redeem_service.redeem_via_proxy(self.settings, w3, condition_id)
+                        logger.info(f"✅ 赎回仓位完成")
                     
                     # 搜索下一个市场
                     logger.info(f"\n🔄 正在搜索下一个 {symbol} 5分钟市场...")
