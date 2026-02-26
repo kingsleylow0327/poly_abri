@@ -576,10 +576,11 @@ class SimpleArbitrageBot:
             # Perform Buy
             # To-do: Buy first then record, would be cannot buy
             order = None
+            record_order = None
             if price_up >= self.settings.yes_buy_threshold and price_up <= 0.95:
                 if best_up is None:
                     return False
-                self.order = {"time_stamp": str(datetime.now().timestamp()),
+                record_order = {"time_stamp": str(datetime.now().timestamp()),
                     "direction": "UP",
                     "entry_price": best_up,
                 }
@@ -592,7 +593,7 @@ class SimpleArbitrageBot:
             elif price_down >= self.settings.no_buy_threshold and price_down <= 0.95:
                 if best_down is None:
                     return False
-                self.order = {"time_stamp": str(datetime.now().timestamp()),
+                record_order = {"time_stamp": str(datetime.now().timestamp()),
                     "direction": "DOWN",
                     "entry_price": best_down
                 }
@@ -607,7 +608,7 @@ class SimpleArbitrageBot:
                 logger.error("Order is None")
                 return False
             
-            self.order["order_size"] = self.settings.order_size
+            record_order["order_size"] = self.settings.order_size
             if order.price * order.size < 1:
                 price_cents = int(round(order.price * 100))
                 min_s = math.ceil(10000 / price_cents)
@@ -619,10 +620,10 @@ class SimpleArbitrageBot:
                         break
                 if not found:
                     order.size = float(math.ceil(1.0 / order.price))
-                self.order["order_size"] = order.size
+                record_order["order_size"] = order.size
                 logger.info(f"Order size adjusted to {order.size} (cost: ${order.size * order.price:.2f})")
             
-            self.order["cost"] = order.size * order.price
+            record_order["cost"] = order.size * order.price
             if not self.settings.dry_run:
                 logger.info(f"执行订单: Price {order.price}, Size {order.size}")
                 results = execute_market_buy(self.settings, order)
@@ -636,8 +637,8 @@ class SimpleArbitrageBot:
                             f.write(f"[{timestamp}] {error_msg}\n")
                             f.write(f"Full error details: {err}\n\n")
                     return False
-                else:
-                    logger.info(f"✅ 订单已执行")
+                logger.info(f"✅ 订单已执行")
+            self.order = record_order
             self.is_performed = True
             return True
         else:
