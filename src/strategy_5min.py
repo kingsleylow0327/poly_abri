@@ -579,28 +579,31 @@ class SimpleArbitrageBot:
             # Perform Buy
             order = None
             record_order = None
-            if best_up and self.is_price_within_range(best_up):
+            # Up still available
+            if best_up:
                 record_order = {"time_stamp": str(datetime.now().timestamp()),
                     "direction": "UP",
-                    "entry_price": best_up,
+                    "entry_price": price_up,
                 }
                 order = OrderDto(
                     token_id=self.yes_token_id,
-                    price=best_up,
+                    price=price_up,
                     size=self.settings.order_size
                 )
-                logger.info(f"买入UP: ${best_up:.2f}")
-            elif best_down and self.is_price_within_range(best_down):
+                logger.info(f"买入UP: ${price_up:.2f}")
+
+            # Down still available
+            elif best_down:
                 record_order = {"time_stamp": str(datetime.now().timestamp()),
                     "direction": "DOWN",
-                    "entry_price": best_down
+                    "entry_price": price_down
                 }
                 order = OrderDto(
                     token_id=self.no_token_id,
-                    price=best_down,
+                    price=price_down,
                     size=self.settings.order_size
                 )
-                logger.info(f"买入DOWN: ${best_down:.2f}")
+                logger.info(f"买入DOWN: ${price_down:.2f}")
             
             if order is None:
                 return False
