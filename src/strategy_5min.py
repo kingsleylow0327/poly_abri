@@ -580,7 +580,7 @@ class SimpleArbitrageBot:
             order = None
             record_order = None
             # Up still available
-            if best_up:
+            if best_up and self.is_price_within_range(price_up):
                 record_order = {"time_stamp": str(datetime.now().timestamp()),
                     "direction": "UP",
                     "entry_price": price_up,
@@ -593,7 +593,7 @@ class SimpleArbitrageBot:
                 logger.info(f"买入UP: ${price_up:.2f}")
 
             # Down still available
-            elif best_down:
+            elif best_down and self.is_price_within_range(price_down):
                 record_order = {"time_stamp": str(datetime.now().timestamp()),
                     "direction": "DOWN",
                     "entry_price": price_down
