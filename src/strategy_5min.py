@@ -655,8 +655,8 @@ class SimpleArbitrageBot:
         logger.info(f"市场: {self.market_slug}")
         logger.info(f"剩余时间: {self.get_time_remaining()}")
         logger.info(f"模式: {'🔸 模拟' if self.settings.dry_run else '🔴 真实交易'}")
-        logger.info(f"成本阈值: ${self.settings.target_pair_cost:.2f}")
         logger.info(f"订单数量: {self.settings.order_size} 股")
+        logger.info(f"买入区间: ${self.settings.price_floor:.2f} - ${self.settings.price_ceil:.2f}")
         logger.info(f"扫描间隔: {interval_seconds}秒")
         if self.settings.max_trades_per_market > 0:
             logger.info(f"每场次最大交易次数: {self.settings.max_trades_per_market}")
