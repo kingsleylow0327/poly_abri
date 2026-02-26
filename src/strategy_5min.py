@@ -558,6 +558,9 @@ class SimpleArbitrageBot:
 
         logger.info("=" * 70)
     
+    def is_price_within_range(self, price: float) -> bool:
+        return price >= self.settings.price_floor and price <= self.settings.price_ceil
+    
     def run_once(self) -> bool:
         """扫描一次寻找机会。"""
         # 检查市场是否关闭
@@ -572,14 +575,11 @@ class SimpleArbitrageBot:
             return False  # 发出停止机器人的信号
         price_up, price_down, size_up, size_down, best_up, best_down = self.get_current_prices()
         logger.debug(f'Up Price: {price_up:.2f}, Down Price: {price_down:.2f}')
-        if price_up >= self.settings.yes_buy_threshold and price_up <= 0.95 or price_down >= self.settings.no_buy_threshold and price_down <= 0.95:
+        if self.is_price_within_range(price_up) or self.is_price_within_range(price_down):
             # Perform Buy
-            # To-do: Buy first then record, would be cannot buy
             order = None
             record_order = None
-            if price_up >= self.settings.yes_buy_threshold and price_up <= 0.95:
-                if best_up is None:
-                    return False
+            if best_up and self.is_price_within_range(best_up):
                 record_order = {"time_stamp": str(datetime.now().timestamp()),
                     "direction": "UP",
                     "entry_price": best_up,
@@ -590,9 +590,7 @@ class SimpleArbitrageBot:
                     size=self.settings.order_size
                 )
                 logger.info(f"买入UP: ${best_up:.2f}")
-            elif price_down >= self.settings.no_buy_threshold and price_down <= 0.95:
-                if best_down is None:
-                    return False
+            elif best_down and self.is_price_within_range(best_down):
                 record_order = {"time_stamp": str(datetime.now().timestamp()),
                     "direction": "DOWN",
                     "entry_price": best_down
@@ -605,7 +603,6 @@ class SimpleArbitrageBot:
                 logger.info(f"买入DOWN: ${best_down:.2f}")
             
             if order is None:
-                logger.error("Order is None")
                 return False
             
             record_order["order_size"] = self.settings.order_size
