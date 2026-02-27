@@ -546,6 +546,7 @@ class SimpleArbitrageBot:
             self.order.get("order_size"),
             f"{self.order.get("cost"):.2f}",
             f"{self.order.get("stoploss_price", 0):.2f}",
+            f"{self.order.get("stoploss_time", 0)}",
             result,
             pnl
         ]
@@ -744,6 +745,7 @@ class SimpleArbitrageBot:
                         if self.order.get("entry_price") - stoploss_price >= self.settings.stoploss:
                             # Market Out here
                             self.order["stoploss_price"] = stoploss_price
+                            self.order["stoploss_time"] = datetime.now().strftime('%H:%M:%S')
                             logger.info("Stoploss triggered !!!")
                             self.is_finished = True
                     continue
