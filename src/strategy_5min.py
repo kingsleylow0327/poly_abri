@@ -456,7 +456,8 @@ class SimpleArbitrageBot:
         logger.info(f"模式: {'🔸 模拟' if self.settings.dry_run else '🔴 真实交易'}")
         logger.info(f"订单份额: ${self.settings.order_size:.2f}")
         logger.info(f"买入区间: ${self.settings.price_floor:.2f} ~ ${self.settings.price_ceil:.2f}")
-        logger.info(f"止损价格: ${self.settings.stoploss:.2f}")
+        logger.info(f"止盈幅度: ${self.settings.take_profit:.2f}")
+        logger.info(f"止损幅度: ${self.settings.stoploss:.2f}")
         logger.info(f"策略区间: {int(self.settings.strategy_start_timestamp/60)} 分 {int(self.settings.strategy_start_timestamp%60)} 秒 ~ {int(self.settings.strategy_end_timestamp/60)} 分 {int(self.settings.strategy_end_timestamp%60)} 秒")
         logger.info("=" * 70)
         
@@ -507,7 +508,8 @@ class SimpleArbitrageBot:
                             logger.info(f"✅ 找到新市场: {new_market_slug}")
                             logger.info("正在使用新市场重启机器人...")
                             logger.info(f"买入区间: ${self.settings.price_floor:.2f} ~ ${self.settings.price_ceil:.2f}")
-                            logger.info(f"止损价格: ${self.settings.stoploss:.2f}")
+                            logger.info(f"止盈幅度: ${self.settings.take_profit:.2f}")
+                            logger.info(f"止损幅度: ${self.settings.stoploss:.2f}")
                             logger.info(f"策略区间: {int(self.settings.strategy_start_timestamp/60)} 分 {int(self.settings.strategy_start_timestamp%60)} 秒 ~  {int(self.settings.strategy_end_timestamp/60)} 分 {int(self.settings.strategy_end_timestamp%60)} 秒")
                             self.__init__(self.settings, symbol, new_market_slug)
                             scan_count = 0
