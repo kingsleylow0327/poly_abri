@@ -320,6 +320,7 @@ class SimpleArbitrageBot:
 
         # Write to CSV
         if self.order is None:
+            logger.info(f"结果: {message}")
             return
         tz_plus_8 = timezone(timedelta(hours=8))
         dt_obj = datetime.fromtimestamp(float(self.order.get("time_stamp")), tz=tz_plus_8)
@@ -482,7 +483,7 @@ class SimpleArbitrageBot:
             while True:
                 # 检查市场是否关闭
                 if self.get_time_remaining() == "CLOSED":
-                    logger.info("\n🚨 市场已关闭！")
+                    logger.info("🚨 市场已关闭！")
                     self.show_final_summary()
                     self.is_performed = False
                     self.is_performed_informed = False
@@ -505,7 +506,7 @@ class SimpleArbitrageBot:
                         logger.info(f"✅ 赎回仓位完成")
                     
                     # 搜索下一个市场
-                    logger.info(f"\n🔄 正在搜索下一个 {symbol} 5分钟市场...")
+                    logger.info(f"🔄 正在搜索下一个 {symbol} 5分钟市场...")
                     try:
                         new_market_slug = find_current_5min_market(symbol)
                         if new_market_slug != self.market_slug:
@@ -541,7 +542,7 @@ class SimpleArbitrageBot:
                         stoploss_margin = round(self.settings.stoploss, 2)
                         if current_price is None:
                             continue
-                        if self.order.get("entry_price") + takeprofit_margin <= current_price:
+                        if takeprofit_margin < 1 and self.order.get("entry_price") + takeprofit_margin <= current_price:
                             takeprofit_price = round(self.order.get("entry_price") + takeprofit_margin, 2)
                             if not self.settings.dry_run:
                                 order = OrderDto(
@@ -557,7 +558,7 @@ class SimpleArbitrageBot:
                             self.is_finished = True
                             continue
 
-                        if current_price <= self.order.get("entry_price") - stoploss_margin:
+                        if stoploss_margin > 0 and current_price <= self.order.get("entry_price") - stoploss_margin:
                             stoploss_price = round(self.order.get("entry_price") - stoploss_margin, 2)
                             if not self.settings.dry_run:
                                 order = OrderDto(

@@ -554,11 +554,11 @@ class SimpleArbitrageBot:
                 
                 # 检查市场是否关闭
                 if self.get_time_remaining() == "CLOSED":
-                    logger.info("\n🚨 市场已关闭！")
+                    logger.info("🚨 市场已关闭！")
                     self.show_final_summary()
                     
                     # 搜索下一个市场
-                    logger.info(f"\n🔄 正在搜索下一个 {symbol} 15分钟市场...")
+                    logger.info(f"🔄 正在搜索下一个 {symbol} 15分钟市场...")
                     try:
                         new_market_slug = find_current_15min_market(symbol)
                         if new_market_slug != self.market_slug:
