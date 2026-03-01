@@ -313,12 +313,11 @@ class SimpleArbitrageBot:
         
         # Get market result
         result = self.get_market_result()
-        if result:
-            message = '😑 No Chance'
-            if self.order:
-                message = f"{'🤑 WIN' if result == self.order.get('direction') else '😭 LOSS'} (Bet: {self.order.get("direction")}, Result: {result})"
-            logger.info(f"结果: {message}")
-        
+        message = '😑 No Chance'
+        if not result:
+            logger.error(f"Fetch Result Error")
+            return
+
         # Write to CSV
         if self.order is None:
             return
@@ -327,15 +326,20 @@ class SimpleArbitrageBot:
         formatted_str = dt_obj.strftime("%Y-%m-%d %H:%M:%S")
         # Win
         pnl = f"{self.order.get("order_size") * (1 - self.order.get("entry_price")):.2f}"
+        # Loss
+        if self.order.get("direction") != result:
+            pnl = f"{(-self.order.get("order_size") * self.order.get("entry_price")):.2f}"
+        message = f"{'🤑 WIN' if result == self.order.get('direction') else '😭 LOSS'} (Bet: {self.order.get("direction")}, Result: {result})"
+        
         # Take Profit
         if self.order.get("takeprofit_price") and self.order.get("takeprofit_price") > 0 :
             pnl = f"{self.order.get("order_size") * ((self.order.get("takeprofit_price") - self.order.get("entry_price"))):.2f}"
+            message = f"🤑 WIN (Bet: {self.order.get("direction")}, TP: {self.order.get("takeprofit_price")})"
         # Stoploss
         if self.order.get("stoploss_price") and self.order.get("stoploss_price") > 0 :
             pnl = f"{self.order.get("order_size") * ((self.order.get("stoploss_price") - self.order.get("entry_price"))):.2f}"
-        # Loss
-        elif self.order.get("direction") != result:
-            pnl = f"{(-self.order.get("order_size") * self.order.get("entry_price")):.2f}"
+            message = f"😭 LOSS (Bet: {self.order.get("direction")}, SL: {self.order.get("stoploss_price")})"
+        logger.info(f"结果: {message}")
         data = [formatted_str,
             self.order.get("direction"),
             self.order.get("entry_price"),
@@ -528,7 +532,7 @@ class SimpleArbitrageBot:
                     continue
                 
                 if self.is_performed:
-                    # Stoploss here
+                    # TP SL here
                     if self.settings.stoploss != 0 or self.settings.take_profit != 1:
                         price_up, price_down, size_up, size_down, best_up, best_down = self.get_current_prices()
                         # Check current order direction
@@ -537,9 +541,8 @@ class SimpleArbitrageBot:
                         stoploss_margin = round(self.settings.stoploss, 2)
                         if current_price is None:
                             continue
-                        if self.order.get("entry_price") + takeprofit_margin >= current_price:
-                            logger.info("Take Profit triggered !!!")
-                            takeprofit_price = self.order.get("entry_price") + takeprofit_margin
+                        if self.order.get("entry_price") + takeprofit_margin <= current_price:
+                            takeprofit_price = round(self.order.get("entry_price") + takeprofit_margin, 2)
                             if not self.settings.dry_run:
                                 order = OrderDto(
                                     token_id=self.order.get("token_id"),
@@ -550,11 +553,12 @@ class SimpleArbitrageBot:
                                     continue
                             self.order["takeprofit_price"] = takeprofit_price
                             self.order["takeprofit_time"] = datetime.now().strftime('%H:%M:%S')
+                            logger.info(f"Take Profit triggered: ${takeprofit_price} !!!")
                             self.is_finished = True
+                            continue
 
-                        if self.order.get("entry_price") - stoploss_margin <= current_price:
-                            logger.info("Stoploss triggered !!!")
-                            stoploss_price = self.order.get("entry_price") - stoploss_margin
+                        if self.order.get("entry_price") - stoploss_margin >= current_price:
+                            stoploss_price = round(self.order.get("entry_price") - stoploss_margin, 2)
                             if not self.settings.dry_run:
                                 order = OrderDto(
                                     token_id=self.order.get("token_id"),
@@ -565,6 +569,7 @@ class SimpleArbitrageBot:
                                     continue
                             self.order["stoploss_price"] = stoploss_price
                             self.order["stoploss_time"] = datetime.now().strftime('%H:%M:%S')
+                            logger.info(f"Stoploss triggered: ${stoploss_price}!!!")
                             self.is_finished = True
                     continue
 
