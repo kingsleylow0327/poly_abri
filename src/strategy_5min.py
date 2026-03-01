@@ -557,7 +557,7 @@ class SimpleArbitrageBot:
                             self.is_finished = True
                             continue
 
-                        if self.order.get("entry_price") - stoploss_margin <= current_price:
+                        if current_price <= self.order.get("entry_price") - stoploss_margin:
                             stoploss_price = round(self.order.get("entry_price") - stoploss_margin, 2)
                             if not self.settings.dry_run:
                                 order = OrderDto(
