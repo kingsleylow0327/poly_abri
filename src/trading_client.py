@@ -1,5 +1,6 @@
 import logging
 
+from datetime import datetime
 from dto.order_dto import OrderDto
 from typing import Optional
 
@@ -165,6 +166,20 @@ def execute_market_sell(settings: Settings, order_dto: OrderDto) -> list[dict]:
     order = order_dto.to_dict()
     order["side"] = "SELL"
     return place_orders_market(settings, order)
+
+def is_tp_sl_success(settings: Settings, order_dto: OrderDto) -> bool:
+    results = execute_market_sell(settings, order_dto)
+    errors = [r for r in results if isinstance(r, dict) and r.get("errorMsg")]
+    if errors:
+        for err in errors:
+            error_msg = f"❌ 订单错误: {err.get('errorMsg', err)}"
+            logger.error(error_msg)
+            with open("error.txt", "a") as f:
+                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                f.write(f"[{timestamp}] {error_msg}\n")
+                f.write(f"Full error details: {err}\n\n")
+        return False
+    return True
 
 
 def get_positions(settings: Settings, token_ids: list[str] = None) -> dict:

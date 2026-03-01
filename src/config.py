@@ -34,6 +34,7 @@ class Settings:
     min_time_remaining_minutes: int = int(os.getenv("MIN_TIME_REMAINING_MINUTES", "0"))
     strategy_start_timestamp: int = int(os.getenv("STRATEGY_START_TIMESTAMP", "0"))
     strategy_end_timestamp: int = int(os.getenv("STRATEGY_END_TIMESTAMP", "0"))
+    take_profit: float = float(os.getenv("TAKE_PROFIT", "1"))
     stoploss: float = float(os.getenv("STOPLOSS", "0"))
     ctf_address: str = os.getenv("CTF_ADDRESS", "")
     usdc_address: str = os.getenv("USDC_ADDRESS", "")

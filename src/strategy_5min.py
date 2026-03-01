@@ -21,7 +21,7 @@ import httpx
 from src.config import load_settings
 from dto.order_dto import OrderDto
 from src.market_lookup import fetch_market_from_slug
-from src.trading_client import get_client, get_balance, get_positions, place_orders_fast, execute_market_buy, execute_market_sell
+from src.trading_client import get_client, get_balance, get_positions, execute_market_buy, is_tp_sl_success
 from py_clob_client.clob_types import BookParams
 
 logging.basicConfig(
@@ -82,7 +82,7 @@ def find_current_5min_market(symbol: str) -> str:
 class SimpleArbitrageBot:
     """实现 Jeremy Whittaker 策略的简单机器人。"""
 
-    def __init__(self, settings, symbol):
+    def __init__(self, settings, symbol, market_slug=None):
         self.settings = settings
         self.client = get_client(settings)
         self.is_performed = False
@@ -94,7 +94,8 @@ class SimpleArbitrageBot:
 
         # 尝试自动查找当前的 5分钟市场
         try:
-            market_slug = find_current_5min_market(symbol)
+            if market_slug is None:
+                market_slug = find_current_5min_market(symbol)
         except Exception as e:
             # 退回方案：使用 .env 中配置的 slug
             if settings.market_slug:
@@ -326,6 +327,9 @@ class SimpleArbitrageBot:
         formatted_str = dt_obj.strftime("%Y-%m-%d %H:%M:%S")
         # Win
         pnl = f"{self.order.get("order_size") * (1 - self.order.get("entry_price")):.2f}"
+        # Take Profit
+        if self.order.get("takeprofit_price") and self.order.get("takeprofit_price") > 0 :
+            pnl = f"{self.order.get("order_size") * ((self.order.get("takeprofit_price") - self.order.get("entry_price"))):.2f}"
         # Stoploss
         if self.order.get("stoploss_price") and self.order.get("stoploss_price") > 0 :
             pnl = f"{self.order.get("order_size") * ((self.order.get("stoploss_price") - self.order.get("entry_price"))):.2f}"
@@ -337,6 +341,8 @@ class SimpleArbitrageBot:
             self.order.get("entry_price"),
             self.order.get("order_size"),
             f"{self.order.get("cost"):.2f}",
+            f"{self.order.get("takeprofit_price", 0):.2f}",
+            f"{self.order.get("takeprofit_time", 0)}",
             f"{self.order.get("stoploss_price", 0):.2f}",
             f"{self.order.get("stoploss_time", 0)}",
             result,
@@ -372,6 +378,7 @@ class SimpleArbitrageBot:
                 record_order = {"time_stamp": str(datetime.now().timestamp()),
                     "direction": "UP",
                     "entry_price": price_up,
+                    "token_id": self.yes_token_id,
                 }
                 order = OrderDto(
                     token_id=self.yes_token_id,
@@ -384,7 +391,8 @@ class SimpleArbitrageBot:
             elif best_down and self.is_price_within_range(price_down):
                 record_order = {"time_stamp": str(datetime.now().timestamp()),
                     "direction": "DOWN",
-                    "entry_price": price_down
+                    "entry_price": price_down,
+                    "token_id": self.no_token_id
                 }
                 order = OrderDto(
                     token_id=self.no_token_id,
@@ -501,7 +509,7 @@ class SimpleArbitrageBot:
                             logger.info(f"买入区间: ${self.settings.price_floor:.2f} ~ ${self.settings.price_ceil:.2f}")
                             logger.info(f"止损价格: ${self.settings.stoploss:.2f}")
                             logger.info(f"策略区间: {int(self.settings.strategy_start_timestamp/60)} 分 {int(self.settings.strategy_start_timestamp%60)} 秒 ~  {int(self.settings.strategy_end_timestamp/60)} 分 {int(self.settings.strategy_end_timestamp%60)} 秒")
-                            self.__init__(self.settings, symbol)
+                            self.__init__(self.settings, symbol, new_market_slug)
                             scan_count = 0
                             continue
                         else:
@@ -519,18 +527,42 @@ class SimpleArbitrageBot:
                 
                 if self.is_performed:
                     # Stoploss here
-                    if self.settings.stoploss != 0:
+                    if self.settings.stoploss != 0 or self.settings.take_profit != 1:
                         price_up, price_down, size_up, size_down, best_up, best_down = self.get_current_prices()
                         # Check current order direction
-                        stoploss_price = price_up if self.order.get("direction") == "UP" else price_down
-                        if stoploss_price is None:
+                        current_price = price_up if self.order.get("direction") == "UP" else price_down
+                        takeprofit_margin = round(self.settings.take_profit, 2)
+                        stoploss_margin = round(self.settings.stoploss, 2)
+                        if current_price is None:
                             continue
-                        # execute_market_sell(self.settings, self.order)
-                        if self.order.get("entry_price") - stoploss_price >= self.settings.stoploss:
-                            # Market Out here
+                        if self.order.get("entry_price") + takeprofit_margin >= current_price:
+                            logger.info("Take Profit triggered !!!")
+                            takeprofit_price = self.order.get("entry_price") + takeprofit_margin
+                            if not self.settings.dry_run:
+                                order = OrderDto(
+                                    token_id=self.order.get("token_id"),
+                                    price=takeprofit_price,
+                                    size=self.order.get("order_size")
+                                )
+                                if not is_tp_sl_success(self.settings, order):
+                                    continue
+                            self.order["takeprofit_price"] = takeprofit_price
+                            self.order["takeprofit_time"] = datetime.now().strftime('%H:%M:%S')
+                            self.is_finished = True
+
+                        if self.order.get("entry_price") - stoploss_margin <= current_price:
+                            logger.info("Stoploss triggered !!!")
+                            stoploss_price = self.order.get("entry_price") - stoploss_margin
+                            if not self.settings.dry_run:
+                                order = OrderDto(
+                                    token_id=self.order.get("token_id"),
+                                    price=stoploss_price,
+                                    size=self.order.get("order_size")
+                                )
+                                if not is_tp_sl_success(self.settings, order):
+                                    continue
                             self.order["stoploss_price"] = stoploss_price
                             self.order["stoploss_time"] = datetime.now().strftime('%H:%M:%S')
-                            logger.info("Stoploss triggered !!!")
                             self.is_finished = True
                     continue
 
