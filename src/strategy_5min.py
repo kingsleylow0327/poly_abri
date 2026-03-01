@@ -306,7 +306,7 @@ class SimpleArbitrageBot:
     
     def show_final_summary(self):
         """市场关闭时显示最终总结。"""
-        logger.info("\n" + "=" * 70)
+        logger.info("=" * 70)
         logger.info("🏁 市场已关闭 - 最终总结")
         logger.info("=" * 70)
         logger.info(f"市场: {self.market_slug}")
@@ -557,7 +557,7 @@ class SimpleArbitrageBot:
                             self.is_finished = True
                             continue
 
-                        if self.order.get("entry_price") - stoploss_margin >= current_price:
+                        if self.order.get("entry_price") - stoploss_margin <= current_price:
                             stoploss_price = round(self.order.get("entry_price") - stoploss_margin, 2)
                             if not self.settings.dry_run:
                                 order = OrderDto(
