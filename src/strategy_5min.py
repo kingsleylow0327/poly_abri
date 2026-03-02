@@ -547,7 +547,7 @@ class SimpleArbitrageBot:
                             if not self.settings.dry_run:
                                 order = OrderDto(
                                     token_id=self.order.get("token_id"),
-                                    price=takeprofit_price,
+                                    price=current_price,
                                     size=self.order.get("order_size")
                                 )
                                 if not is_tp_sl_success(self.settings, order):
@@ -563,7 +563,7 @@ class SimpleArbitrageBot:
                             if not self.settings.dry_run:
                                 order = OrderDto(
                                     token_id=self.order.get("token_id"),
-                                    price=stoploss_price,
+                                    price=current_price,
                                     size=self.order.get("order_size")
                                 )
                                 if not is_tp_sl_success(self.settings, order):
