@@ -84,7 +84,7 @@ class SimpleArbitrageBot:
     """实现 Jeremy Whittaker 策略的简单机器人。"""
 
     def __init__(self, settings, symbol, market_slug=None):
-        self.symbol = symbol
+        self.symbol = f"{symbol.upper()}USDT"
         self.settings = settings
         self.client = get_client(settings)
         self.is_performed = False
