@@ -1,1 +1,1 @@
-DateTime,Direction,Entry Price,Order Size,Cost,TakeProfit Price,TakeProfit Time,Stoploss Price,Stoploss Time,Result,PNL
+DateTime,Direction,Entry Price,Order Size,Cost,TakeProfit Price,TakeProfit Time,Stoploss Price,Stoploss Time,Result,Binance Initial,Binance Buy,Binance TPSL,Binance Final,PNL

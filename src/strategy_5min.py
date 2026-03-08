@@ -19,6 +19,7 @@ from typing import Optional, Tuple, List
 import httpx
 
 from src.config import load_settings
+from src.binance_service import request_price
 from dto.order_dto import OrderDto
 from src.market_lookup import fetch_market_from_slug
 from src.trading_client import get_client, get_balance, get_positions, execute_market_buy, is_tp_sl_success
@@ -91,6 +92,12 @@ class SimpleArbitrageBot:
         self.is_started = False
         self.is_ended = False
         self.order = None
+
+        # Binance
+        self.binance_initial_pirce = None
+        self.binance_buy_price = None
+        self.binance_tp_sl_price = None
+        self.binance_final_price = None
 
         # 尝试自动查找当前的 5分钟市场
         try:
@@ -351,6 +358,10 @@ class SimpleArbitrageBot:
             f"{self.order.get("stoploss_price", 0):.2f}",
             f"{self.order.get("stoploss_time", 0)}",
             result,
+            f"{f'{self.binance_initial_pirce:.2f}' if self.binance_initial_pirce else 'N/A'}",
+            f"{f'{self.binance_buy_price:.2f}' if self.binance_buy_price else 'N/A'}",
+            f"{f'{self.binance_tp_sl_price:.2f}' if self.binance_tp_sl_price else 'N/A'}",
+            f"{f'{self.binance_final_price:.2f}' if self.binance_final_price else 'N/A'}",
             pnl
         ]
         # Write to CSV
@@ -439,6 +450,7 @@ class SimpleArbitrageBot:
                             f.write(f"Full error details: {err}\n\n")
                     return False
                 logger.info(f"✅ 订单已执行")
+            self.binance_buy_price = request_price(symbol)
             self.order = record_order
             self.is_performed = True
             return True
@@ -484,6 +496,7 @@ class SimpleArbitrageBot:
                 # 检查市场是否关闭
                 if self.get_time_remaining() == "CLOSED":
                     logger.info("🚨 市场已关闭！")
+                    self.binance_final_price = request_price(symbol)
                     self.show_final_summary()
                     self.is_performed = False
                     self.is_performed_informed = False
@@ -517,6 +530,9 @@ class SimpleArbitrageBot:
                             logger.info(f"止损幅度: ${self.settings.stoploss:.2f}")
                             logger.info(f"策略区间: {int(self.settings.strategy_start_timestamp/60)} 分 {int(self.settings.strategy_start_timestamp%60)} 秒 ~  {int(self.settings.strategy_end_timestamp/60)} 分 {int(self.settings.strategy_end_timestamp%60)} 秒")
                             self.__init__(self.settings, symbol, new_market_slug)
+                            # Check Binance Price
+                            self.binance_initial_pirce = request_price(symbol)
+                            logger.info(f"Binance Initial Price: ${self.binance_initial_pirce:.2f}")
                             scan_count = 0
                             continue
                         else:
@@ -554,6 +570,7 @@ class SimpleArbitrageBot:
                                     continue
                             self.order["takeprofit_price"] = takeprofit_price
                             self.order["takeprofit_time"] = datetime.now().strftime('%H:%M:%S')
+                            self.binance_tp_sl_price = request_price(symbol)
                             logger.info(f"Take Profit triggered: ${takeprofit_price} !!!")
                             self.is_finished = True
                             continue
@@ -570,6 +587,7 @@ class SimpleArbitrageBot:
                                     continue
                             self.order["stoploss_price"] = stoploss_price
                             self.order["stoploss_time"] = datetime.now().strftime('%H:%M:%S')
+                            self.binance_tp_sl_price = request_price(symbol)
                             logger.info(f"Stoploss triggered: ${stoploss_price}!!!")
                             self.is_finished = True
                     continue
