@@ -84,6 +84,7 @@ class SimpleArbitrageBot:
     """实现 Jeremy Whittaker 策略的简单机器人。"""
 
     def __init__(self, settings, symbol, market_slug=None):
+        self.symbol = symbol
         self.settings = settings
         self.client = get_client(settings)
         self.is_performed = False
@@ -450,7 +451,7 @@ class SimpleArbitrageBot:
                             f.write(f"Full error details: {err}\n\n")
                     return False
                 logger.info(f"✅ 订单已执行")
-            self.binance_buy_price = request_price(symbol)
+            self.binance_buy_price = request_price(self.symbol)
             self.order = record_order
             self.is_performed = True
             return True
@@ -496,7 +497,7 @@ class SimpleArbitrageBot:
                 # 检查市场是否关闭
                 if self.get_time_remaining() == "CLOSED":
                     logger.info("🚨 市场已关闭！")
-                    self.binance_final_price = request_price(symbol)
+                    self.binance_final_price = request_price(self.symbol)
                     self.show_final_summary()
                     self.is_performed = False
                     self.is_performed_informed = False
@@ -531,7 +532,7 @@ class SimpleArbitrageBot:
                             logger.info(f"策略区间: {int(self.settings.strategy_start_timestamp/60)} 分 {int(self.settings.strategy_start_timestamp%60)} 秒 ~  {int(self.settings.strategy_end_timestamp/60)} 分 {int(self.settings.strategy_end_timestamp%60)} 秒")
                             self.__init__(self.settings, symbol, new_market_slug)
                             # Check Binance Price
-                            self.binance_initial_pirce = request_price(symbol)
+                            self.binance_initial_pirce = request_price(self.symbol)
                             logger.info(f"Binance Initial Price: ${self.binance_initial_pirce:.2f}")
                             scan_count = 0
                             continue
@@ -570,7 +571,7 @@ class SimpleArbitrageBot:
                                     continue
                             self.order["takeprofit_price"] = takeprofit_price
                             self.order["takeprofit_time"] = datetime.now().strftime('%H:%M:%S')
-                            self.binance_tp_sl_price = request_price(symbol)
+                            self.binance_tp_sl_price = request_price(self.symbol)
                             logger.info(f"Take Profit triggered: ${takeprofit_price} !!!")
                             self.is_finished = True
                             continue
@@ -587,7 +588,7 @@ class SimpleArbitrageBot:
                                     continue
                             self.order["stoploss_price"] = stoploss_price
                             self.order["stoploss_time"] = datetime.now().strftime('%H:%M:%S')
-                            self.binance_tp_sl_price = request_price(symbol)
+                            self.binance_tp_sl_price = request_price(self.symbol)
                             logger.info(f"Stoploss triggered: ${stoploss_price}!!!")
                             self.is_finished = True
                     continue
