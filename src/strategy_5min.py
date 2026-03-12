@@ -18,7 +18,7 @@ from typing import Optional, Tuple, List
 
 import httpx
 
-from src.config import load_settings
+from src.config import load_settings, Settings
 from src.binance_service import request_price
 from dto.order_dto import OrderDto
 from src.market_lookup import fetch_market_from_slug
@@ -377,7 +377,7 @@ class SimpleArbitrageBot:
     def is_price_within_range(self, price: float) -> bool:
         return price >= self.settings.price_floor and price <= self.settings.price_ceil
     
-    def run_once(self) -> bool:
+    def run_once(self, settings: Settings) -> bool:
         """扫描一次寻找机会。"""
         # 检查市场是否关闭
         time_remaining = self.get_time_remaining()
@@ -390,8 +390,11 @@ class SimpleArbitrageBot:
             # Perform Buy
             order = None
             record_order = None
+            binance_buy_price = request_price(self.symbol)
             # Up still available
             if best_up and self.is_price_within_range(price_up):
+                if price_up - binance_buy_price < settings.binance_threshold:
+                    return False
                 record_order = {"time_stamp": str(datetime.now().timestamp()),
                     "direction": "UP",
                     "entry_price": price_up,
@@ -406,6 +409,8 @@ class SimpleArbitrageBot:
 
             # Down still available
             elif best_down and self.is_price_within_range(price_down):
+                if binance_buy_price - price_down < settings.binance_threshold:
+                    return False
                 record_order = {"time_stamp": str(datetime.now().timestamp()),
                     "direction": "DOWN",
                     "entry_price": price_down,
@@ -451,7 +456,7 @@ class SimpleArbitrageBot:
                             f.write(f"Full error details: {err}\n\n")
                     return False
                 logger.info(f"✅ 订单已执行")
-            self.binance_buy_price = request_price(self.symbol)
+            self.binance_buy_price = binance_buy_price
             self.order = record_order
             self.is_performed = True
             return True
@@ -462,7 +467,7 @@ class SimpleArbitrageBot:
             )
             return False
     
-    async def monitor(self, symbol: str, interval_seconds: int = 10):
+    async def monitor(self, symbol: str, interval_seconds: int = 10, settings: Settings = None):
         """持续监控套利机会。"""
         logger.info("=" * 70)
         logger.info(f"🚀 {symbol} 5分钟套利机器人已启动")
@@ -599,7 +604,7 @@ class SimpleArbitrageBot:
                 scan_count += 1
                 logger.debug(f"\n[Scan #{scan_count} {symbol.upper()}] {datetime.now().strftime('%H:%M:%S')}")
                 
-                self.run_once()
+                self.run_once(settings)
                 
                 # logger.info(f"等待 {interval_seconds}秒...\n")
                 await asyncio.sleep(interval_seconds)
@@ -626,7 +631,7 @@ async def strategy(symbol: str):
     # 创建并运行机器人
     try:
         bot = SimpleArbitrageBot(settings, symbol)
-        await bot.monitor(symbol, interval_seconds=0)
+        await bot.monitor(symbol, interval_seconds=0, settings=settings)
     except Exception as e:
         logger.error(f"❌ 致命错误: {e}", exc_info=True)
 

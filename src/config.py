@@ -38,6 +38,7 @@ class Settings:
     stoploss: float = float(os.getenv("STOPLOSS", "0"))
     ctf_address: str = os.getenv("CTF_ADDRESS", "")
     usdc_address: str = os.getenv("USDC_ADDRESS", "")
+    binance_threshold: int = int(os.getenv("BINANCE_THRESHOLD", "0"))
 
 
 def load_settings() -> Settings:
