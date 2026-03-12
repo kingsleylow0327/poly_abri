@@ -95,7 +95,7 @@ class SimpleArbitrageBot:
         self.order = None
 
         # Binance
-        self.binance_initial_pirce = None
+        self.binance_initial_price = None
         self.binance_buy_price = None
         self.binance_tp_sl_price = None
         self.binance_final_price = None
@@ -359,7 +359,7 @@ class SimpleArbitrageBot:
             f"{self.order.get("stoploss_price", 0):.2f}",
             f"{self.order.get("stoploss_time", 0)}",
             result,
-            f"{f'{self.binance_initial_pirce:.2f}' if self.binance_initial_pirce else 'N/A'}",
+            f"{f'{self.binance_initial_price:.2f}' if self.binance_initial_price else 'N/A'}",
             f"{f'{self.binance_buy_price:.2f}' if self.binance_buy_price else 'N/A'}",
             f"{f'{self.binance_tp_sl_price:.2f}' if self.binance_tp_sl_price else 'N/A'}",
             f"{f'{self.binance_final_price:.2f}' if self.binance_final_price else 'N/A'}",
@@ -393,7 +393,7 @@ class SimpleArbitrageBot:
             binance_buy_price = request_price(self.symbol)
             # Up still available
             if best_up and self.is_price_within_range(price_up):
-                if price_up - binance_buy_price < settings.binance_threshold:
+                if binance_buy_price - self.binance_initial_price >= settings.binance_threshold:
                     return False
                 record_order = {"time_stamp": str(datetime.now().timestamp()),
                     "direction": "UP",
@@ -409,7 +409,7 @@ class SimpleArbitrageBot:
 
             # Down still available
             elif best_down and self.is_price_within_range(price_down):
-                if binance_buy_price - price_down < settings.binance_threshold:
+                if self.binance_initial_price - price_down >= settings.binance_threshold:
                     return False
                 record_order = {"time_stamp": str(datetime.now().timestamp()),
                     "direction": "DOWN",
@@ -539,8 +539,8 @@ class SimpleArbitrageBot:
                             logger.info(f"Binance 阈值: ${self.settings.binance_threshold:.2f}")
                             self.__init__(self.settings, symbol, new_market_slug)
                             # Check Binance Price
-                            self.binance_initial_pirce = request_price(self.symbol)
-                            logger.info(f"Binance Initial Price: ${self.binance_initial_pirce:.2f}")
+                            self.binance_initial_price = request_price(self.symbol)
+                            logger.info(f"Binance Initial Price: ${self.binance_initial_price:.2f}")
                             scan_count = 0
                             continue
                         else:
