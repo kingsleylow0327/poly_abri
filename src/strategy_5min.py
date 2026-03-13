@@ -483,6 +483,8 @@ class SimpleArbitrageBot:
         logger.info(f"止损幅度: ${self.settings.stoploss:.2f}")
         logger.info(f"策略区间: {int(self.settings.strategy_start_timestamp/60)} 分 {int(self.settings.strategy_start_timestamp%60)} 秒 ~ {int(self.settings.strategy_end_timestamp/60)} 分 {int(self.settings.strategy_end_timestamp%60)} 秒")
         logger.info(f"Binance 阈值: ${self.settings.binance_threshold:.2f}")
+        self.binance_initial_price = request_price(symbol)
+        logger.info(f"Binance 初始价格: ${self.binance_initial_price:.2f}")
         logger.info("=" * 70)
         
         scan_count = 0
