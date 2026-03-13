@@ -409,7 +409,7 @@ class SimpleArbitrageBot:
 
             # Down still available
             elif best_down and self.is_price_within_range(price_down):
-                if self.binance_initial_price - price_down >= settings.binance_threshold:
+                if self.binance_initial_price - binance_buy_price >= settings.binance_threshold:
                     return False
                 record_order = {"time_stamp": str(datetime.now().timestamp()),
                     "direction": "DOWN",
