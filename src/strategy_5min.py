@@ -11,7 +11,8 @@ import re
 import sys
 import csv
 import os
-import math
+import threading
+import time
 import src.redeem_service as redeem_service
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Tuple, List
@@ -19,7 +20,7 @@ from typing import Optional, Tuple, List
 import httpx
 
 from src.config import load_settings, Settings
-from src.binance_service import request_price
+from src.binance_service import BinanceWebsocket
 from dto.order_dto import OrderDto
 from src.market_lookup import fetch_market_from_slug
 from src.trading_client import get_client, get_balance, get_positions, execute_market_buy, is_tp_sl_success
@@ -35,6 +36,7 @@ logger.setLevel(logging.INFO)
 # 禁用来自 httpx 的 HTTP 日志
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
+BINANCE_WEBSOCKET = None
 
 def find_current_5min_market(symbol: str) -> str:
     """
@@ -390,7 +392,7 @@ class SimpleArbitrageBot:
             # Perform Buy
             order = None
             record_order = None
-            binance_buy_price = request_price(self.symbol)
+            binance_buy_price = BINANCE_WEBSOCKET.get_price()
             # Up still available
             if best_up and self.is_price_within_range(price_up):
                 if binance_buy_price - self.binance_initial_price <= settings.binance_threshold:
@@ -486,7 +488,7 @@ class SimpleArbitrageBot:
         logger.info(f"止损幅度: ${self.settings.stoploss:.2f}")
         logger.info(f"策略区间: {int(self.settings.strategy_start_timestamp/60)} 分 {int(self.settings.strategy_start_timestamp%60)} 秒 ~ {int(self.settings.strategy_end_timestamp/60)} 分 {int(self.settings.strategy_end_timestamp%60)} 秒")
         logger.info(f"Binance 阈值: ${self.settings.binance_threshold:.2f}")
-        self.binance_initial_price = request_price(self.symbol)
+        self.binance_initial_price = BINANCE_WEBSOCKET.get_price()
         logger.info(f"Binance 初始价格: ${self.binance_initial_price:.2f}")
         logger.info("=" * 70)
         
@@ -508,7 +510,7 @@ class SimpleArbitrageBot:
                 # 检查市场是否关闭
                 if self.get_time_remaining() == "CLOSED":
                     logger.info("🚨 市场已关闭！")
-                    self.binance_final_price = request_price(self.symbol)
+                    self.binance_final_price = BINANCE_WEBSOCKET.get_price()
                     self.show_final_summary()
                     self.is_performed = False
                     self.is_performed_informed = False
@@ -544,7 +546,7 @@ class SimpleArbitrageBot:
                             logger.info(f"Binance 阈值: ${self.settings.binance_threshold:.2f}")
                             self.__init__(self.settings, symbol, new_market_slug)
                             # Check Binance Price
-                            self.binance_initial_price = request_price(self.symbol)
+                            self.binance_initial_price = BINANCE_WEBSOCKET.get_price()
                             logger.info(f"Binance Initial Price: ${self.binance_initial_price:.2f}")
                             scan_count = 0
                             continue
@@ -583,7 +585,7 @@ class SimpleArbitrageBot:
                                     continue
                             self.order["takeprofit_price"] = takeprofit_price
                             self.order["takeprofit_time"] = datetime.now().strftime('%H:%M:%S')
-                            self.binance_tp_sl_price = request_price(self.symbol)
+                            self.binance_tp_sl_price = BINANCE_WEBSOCKET.get_price()
                             logger.info(f"Take Profit triggered: ${takeprofit_price} !!!")
                             self.is_finished = True
                             continue
@@ -600,7 +602,7 @@ class SimpleArbitrageBot:
                                     continue
                             self.order["stoploss_price"] = stoploss_price
                             self.order["stoploss_time"] = datetime.now().strftime('%H:%M:%S')
-                            self.binance_tp_sl_price = request_price(self.symbol)
+                            self.binance_tp_sl_price = BINANCE_WEBSOCKET.get_price()
                             logger.info(f"Stoploss triggered: ${stoploss_price}!!!")
                             self.is_finished = True
                     continue
@@ -634,8 +636,11 @@ async def strategy(symbol: str):
     if not settings.private_key:
         logger.error("❌ 错误: .env 中未配置 POLYMARKET_PRIVATE_KEY")
         return
-    
-    # 创建并运行机器人
+    global BINANCE_WEBSOCKET
+    logger.info(f"正在连接 Binance {symbol.upper()} WebSocket...")
+    BINANCE_WEBSOCKET = BinanceWebsocket(f"{symbol}usdt")
+    BINANCE_WEBSOCKET.start()
+
     try:
         bot = SimpleArbitrageBot(settings, symbol)
         await bot.monitor(symbol, interval_seconds=0, settings=settings)

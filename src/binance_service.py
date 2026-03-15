@@ -1,11 +1,50 @@
-import requests
+import websocket
+import json
+import threading
+import time
 
 def request_price(symbol: str):
     url = f"https://api.binance.com/api/v3/ticker/price?symbol={symbol}"
     response = requests.get(url)
     return float(response.json().get('price'))
 
-# might need to use chain link, https://data.chain.link/streams/btc-usd-cexprice-streams
+class BinanceWebsocket:
+    def __init__(self, symbol: str):
+        self.ws = None
+        self.thread = None
+        self.running = False
+        self.symbol = symbol
+        self.current_market_data = {"price": 0.0, "symbol": ""}
+
+    def start(self):
+        self.running = True
+        self.thread = threading.Thread(target=self.run_vsocket, args=(self.symbol,), daemon=True)
+        self.thread.start()
+        time.sleep(2)
+
+    def stop(self):
+        self.running = False
+        self.thread.join()
+
+    def on_message(self, ws, message):
+        data = json.loads(message)
+        # Update the shared dictionary
+        self.current_market_data["price"] = float(data['c'])
+        self.current_market_data["symbol"] = data['s']
+
+    def run_vsocket(self, symbol: str):
+        # Use lowercase symbol for the URL
+        socket_url = f"wss://stream.binance.com:9443/ws/{symbol.lower()}@ticker"
+        ws = websocket.WebSocketApp(socket_url, 
+                                    on_message=self.on_message)
+        ws.run_forever(ping_interval=70)
     
+    def get_price(self):
+        return self.current_market_data["price"]
+
+
 if __name__ == "__main__":
-    print(request_price("BTCUSDT"))
+    binance_websocket = BinanceWebsocket("BTCUSDT")
+    binance_websocket.start()
+    while True:
+        print(binance_websocket.get_price())
