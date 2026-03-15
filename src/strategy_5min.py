@@ -426,22 +426,25 @@ class SimpleArbitrageBot:
             if order is None:
                 return False
             
-            record_order["order_size"] = self.settings.order_size
-            if order.price * order.size < 1:
-                price_cents = int(round(order.price * 100))
-                min_s = math.ceil(10000 / price_cents)
-                found = False
-                for s in range(min_s, min_s + 200):
-                    if (s * price_cents) % 100 == 0:
-                        order.size = s / 100
-                        found = True
-                        break
-                if not found:
-                    order.size = float(math.ceil(1.0 / order.price))
-                record_order["order_size"] = order.size
-                logger.info(f"Order size adjusted to {order.size} (cost: ${order.size * order.price:.2f})")
+            def get_adjusted_size(target_size, price):
+                min_cost = max(1.01, target_size)
+                size = round(min_cost / price, 2)
+
+                for i in range(100): 
+                    current_size = round(size + (i * 0.01), 2)
+                    cost = current_size * price
+                    if round(cost * 100, 4) % 1 == 0:
+                        if cost >= min_cost:
+                            return current_size, cost
+                            
+                return size, size * price
+            new_size, total_cost = get_adjusted_size(order.size, order.price)
+
+            order.size = new_size
+            record_order["order_size"] = new_size
+            record_order["cost"] = total_cost
+            logger.info(f"Order size adjusted to {order.size} (cost: ${total_cost:.2f})")
             
-            record_order["cost"] = order.size * order.price
             if not self.settings.dry_run:
                 logger.info(f"执行订单: Price {order.price}, Size {order.size}")
                 results = execute_market_buy(self.settings, order)
