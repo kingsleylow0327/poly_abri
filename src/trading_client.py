@@ -149,7 +149,7 @@ def place_orders_market(settings: Settings, orders: dict) -> list[dict]:
         side=BUY if side_up == "BUY" else SELL
     )
     signed_order = client.create_order(order_args)
-    post_args.append(PostOrdersArgs(order=signed_order, orderType=OrderType.FOK))
+    post_args.append(PostOrdersArgs(order=signed_order, orderType=OrderType.FAK))
 
     try:
         return client.post_orders(post_args)
