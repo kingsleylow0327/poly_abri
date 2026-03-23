@@ -372,7 +372,7 @@ class SimpleArbitrageBot:
         with open(csv_path, mode='a', newline='') as file:
             writer = csv.writer(file)
             writer.writerow(data)
-        logger.info(f"模式: {'🔸 模拟' if self.settings.dry_run else '🔴 真实交易'}")
+        logger.info(f"模式: {'🔸 模拟' if self.settings.dry_run else '💰 真实交易'}")
 
         logger.info("=" * 70)
     
