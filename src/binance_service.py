@@ -12,27 +12,33 @@ class BinanceWebsocket:
     def __init__(self, symbol: str):
         self.ws = None
         self.thread = None
-        self.running = False
+        self.is_running = False
         self.symbol = symbol
         self.current_market_data = {"price": 0.0, "symbol": ""}
 
     def start(self):
-        self.running = True
+        self.is_running = True
         self.thread = threading.Thread(target=self.run_vsocket, args=(self.symbol,), daemon=True)
         self.thread.start()
         time.sleep(2)
 
     def stop(self):
-        self.running = False
+        self.is_running = False
         if self.ws:
             self.ws.close()
         if self.thread and self.thread.is_alive():
             self.thread.join()
 
+    def on_open(self, ws):
+        self.is_running = True
+        print("[BinanceWebSocket] Opened connection")
+
     def on_error(self, ws, error):
+        self.is_running = False
         print(f"[BinanceWebSocket] Error: {error}")
 
     def on_close(self, ws, close_status_code, close_msg):
+        self.is_running = False
         print(f"[BinanceWebSocket] Closed | status: {close_status_code}, msg: {close_msg}")
 
     def on_message(self, ws, message):
@@ -44,16 +50,17 @@ class BinanceWebsocket:
     def run_vsocket(self, symbol: str):
         # Use lowercase symbol for the URL
         socket_url = f"wss://stream.binance.com:9443/ws/{symbol.lower()}@ticker"
-        while self.running:
+        while self.is_running:
             try:
                 self.ws = websocket.WebSocketApp(socket_url, 
+                                            on_open=self.on_open,
                                             on_message=self.on_message,
                                             on_error=self.on_error,
                                             on_close=self.on_close)
                 self.ws.run_forever(ping_interval=30)
             except Exception as e:
                 print(f"[BinanceWebSocket] Exception: {e}")
-            if self.running:
+            if self.is_running:
                 print(f"[BinanceWebSocket] Reconnecting in 5 seconds...")
                 time.sleep(5)
     
