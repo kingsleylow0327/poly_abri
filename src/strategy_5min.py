@@ -481,7 +481,7 @@ class SimpleArbitrageBot:
         logger.info(f"💰 钱包余额: ${current_balance:.2f}")
         logger.info(f"市场: {self.market_slug}")
         logger.info(f"剩余时间: {self.get_time_remaining()}")
-        logger.info(f"模式: {'🔸 模拟' if self.settings.dry_run else '🔴 真实交易'}")
+        logger.info(f"模式: {'🔸 模拟' if self.settings.dry_run else '💰 真实交易'}")
         logger.info(f"订单份额: ${self.settings.order_size:.2f}")
         logger.info(f"买入区间: ${self.settings.price_floor:.2f} ~ ${self.settings.price_ceil:.2f}")
         logger.info(f"止盈幅度: ${self.settings.take_profit:.2f}")
