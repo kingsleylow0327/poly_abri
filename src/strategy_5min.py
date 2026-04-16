@@ -11,19 +11,19 @@ import re
 import sys
 import csv
 import os
-import threading
 import time
 import src.redeem_service as redeem_service
 from datetime import datetime, timezone, timedelta
-from typing import Optional, Tuple, List
+from typing import Optional
 
 import httpx
 
 from src.config import load_settings, Settings
-from src.binance_service import BinanceWebsocket
+from src.binance_service import BinanceWebsocket, get_binance_price
+from src.poly_market_service import PolyMarketWebsocket, get_poly_price
 from dto.order_dto import OrderDto
 from src.market_lookup import fetch_market_from_slug
-from src.trading_client import get_client, get_balance, get_positions, execute_market_buy, is_tp_sl_success
+from src.trading_client import get_client, get_balance, execute_market_buy, is_tp_sl_success
 from py_clob_client.clob_types import BookParams
 
 logging.basicConfig(
@@ -37,6 +37,7 @@ logger.setLevel(logging.INFO)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 BINANCE_WEBSOCKET = None
+POLY_WEBSOCKET = None
 
 def find_current_5min_market(symbol: str) -> str:
     """
@@ -82,11 +83,11 @@ def find_current_5min_market(symbol: str) -> str:
         raise
 
 
-class SimpleArbitrageBot:
+class LastWindowStrategyBot:
     """实现 Jeremy Whittaker 策略的简单机器人。"""
 
-    def __init__(self, settings, symbol, market_slug=None):
-        self.symbol = f"{symbol.upper()}USDT"
+    def __init__(self, settings, symbol: str, market_slug=None):
+        self.symbol = symbol
         self.settings = settings
         self.client = get_client(settings)
         self.is_performed = False
@@ -186,78 +187,6 @@ class SimpleArbitrageBot:
         """获取当前 USDC 余额。"""
         return get_balance(self.settings)
 
-    def get_current_prices(self) -> tuple[float, float, int, int, float, float] | tuple[None, None, None, None,None,None]:
-        """
-        使用最后交易价格获取当前价格（像原始版本一样）。
-        同时获取订单簿流动性以验证是否有足够的股份。
-        返回:
-            (up_price, down_price, up_size, down_size) - 价格和可用数量
-        """
-        max_retries = 3
-        for attempt in range(1, max_retries + 1):
-            try:
-                # 批量获取两个方向的最后交易价格
-
-                params = [
-                    BookParams(token_id=self.yes_token_id),
-                    BookParams(token_id=self.no_token_id)
-                ]
-                prices_response = self.client.get_last_trades_prices(params=params)
-
-                # prices_response 应为列表或字典，需根据SDK实际返回结构调整
-                price_up = price_down = 0
-                for item in prices_response:
-                    if item.get("token_id") == self.yes_token_id:
-                        price_up = float(item.get("price", 0))
-                    elif item.get("token_id") == self.no_token_id:
-                        price_down = float(item.get("price", 0))
-                # 获取订单簿以检查可用流动性
-                        # 获取订单簿数据（一次请求拿到 UP/DOWN）
-                books = self._fetch_orderbooks([self.yes_token_id, self.no_token_id])
-                orderbook_up = books.get(self.yes_token_id, {})
-                orderbook_down = books.get(self.no_token_id, {})
-                size_up = orderbook_up.get("ask_size", 0)
-                size_down = orderbook_down.get("ask_size", 0)
-                best_up = orderbook_up.get("best_ask", 0)
-                best_down = orderbook_down.get("best_ask", 0)
-                return price_up, price_down, size_up, size_down, best_up, best_down
-            except Exception as e:
-                logger.error(f"获取价格时出错 (attempt {attempt}/{max_retries}): {e}")
-                if attempt < max_retries:
-                    import time
-                    time.sleep(1)
-                else:
-                    logger.error(f"获取价格失败，已重试 {max_retries} 次")
-                    return None, None, None, None, None, None
-
-    def _fetch_orderbooks(self, token_ids: List[str]) -> dict:
-        """批量获取多个 token 的订单簿（一次请求），按 asset_id 映射。"""
-        try:
-            params = [BookParams(token_id=t) for t in token_ids]
-            orderbooks = self.client.get_order_books(params=params)
-
-            result = {}
-            for ob in orderbooks:
-                asset_id = getattr(ob, "asset_id", None) or getattr(ob, "token_id", None)
-                if not asset_id:
-                    continue
-                bids = ob.bids if hasattr(ob, 'bids') and ob.bids else []
-                asks = ob.asks if hasattr(ob, 'asks') and ob.asks else []
-                best_bid = float(bids[-1].price) if bids else None
-                best_ask = float(asks[-1].price) if asks else None
-                spread = (best_ask - best_bid) if (best_bid and best_ask) else None
-                result[asset_id] = {
-                    "best_bid": best_bid,
-                    "best_ask": best_ask,
-                    "spread": spread,
-                    "bid_size": float(bids[-1].size) if bids else 0,
-                    "ask_size": float(asks[-1].size) if asks else 0
-                }
-            return result
-        except Exception as e:
-            logger.error(f"? 获取订单簿时出错: {e}")
-            return {}
-
     def is_within_strategy_window(self):
         now = int(datetime.now().timestamp())
         if not self.is_performed_informed and now < self.strategy_start_timestamp:
@@ -272,29 +201,12 @@ class SimpleArbitrageBot:
             self.is_ended = True
             logger.info("策略窗口结束！！！")
         return now >= self.strategy_start_timestamp and now <= self.strategy_end_timestamp
-
-    def show_current_positions(self):
-        """显示 UP 和 DOWN 代币的当前股份持仓。"""
-        try:
-            positions = get_positions(self.settings, [self.yes_token_id, self.no_token_id])
-            
-            up_shares = positions.get(self.yes_token_id, {}).get("size", 0)
-            down_shares = positions.get(self.no_token_id, {}).get("size", 0)
-            
-            logger.info("-" * 70)
-            logger.info("📊 当前持仓:")
-            logger.info(f"   上涨股份:   {up_shares:.2f}")
-            logger.info(f"   下跌股份: {down_shares:.2f}")
-            logger.info("-" * 70)
-            
-        except Exception as e:
-            logger.warning(f"无法获取持仓: {e}")
-    
+   
     def get_market_result(self) -> Optional[str]:
         """获取哪个选项赢得了市场。"""
         try:
             # 获取最终价格
-            price_up, price_down, _, _, _, _ = self.get_current_prices()
+            price_up, price_down = self.get_current_poly_price()
             
             if price_up is None or price_down is None:
                 return None
@@ -372,29 +284,38 @@ class SimpleArbitrageBot:
         with open(csv_path, mode='a', newline='') as file:
             writer = csv.writer(file)
             writer.writerow(data)
-        logger.info(f"模式: {'🔸 模拟' if self.settings.dry_run else '💰 真实交易'}")
-
         logger.info("=" * 70)
+        logger.info("")
     
     def is_price_within_range(self, price: float) -> bool:
         return price >= self.settings.price_floor and price <= self.settings.price_ceil
     
+    def get_current_binance_price(self):
+        return get_binance_price(BINANCE_WEBSOCKET).get(f"{self.symbol}usdt".upper())
+    
+    def get_current_poly_price(self):
+        poly_price_dict = get_poly_price(POLY_WEBSOCKET)
+        price_up, price_down = poly_price_dict.get("Up"), poly_price_dict.get("Down")
+        return price_up, price_down
+    
     def run_once(self, settings: Settings) -> bool:
         """扫描一次寻找机会。"""
         # 检查市场是否关闭
+        # logger.info(f"Time remaining: {self.get_time_remaining()} | Poly: {get_poly_price(POLY_WEBSOCKET)}| Binance: {self.get_current_binance_price()}")
         time_remaining = self.get_time_remaining()
         if time_remaining == "CLOSED":
             return False  # 发出停止机器人的信号
         
-        price_up, price_down, size_up, size_down, best_up, best_down = self.get_current_prices()
+        # Change to websocket
+        price_up, price_down = self.get_current_poly_price()
         logger.debug(f'Up Price: {price_up:.2f}, Down Price: {price_down:.2f}')
         if self.is_price_within_range(price_up) or self.is_price_within_range(price_down):
             # Perform Buy
             order = None
             record_order = None
-            binance_buy_price = BINANCE_WEBSOCKET.get_price()
+            binance_buy_price = self.get_current_binance_price()
             # Up still available
-            if best_up and self.is_price_within_range(price_up):
+            if price_up and self.is_price_within_range(price_up):
                 if binance_buy_price - self.binance_initial_price <= settings.binance_threshold:
                     return False
                 record_order = {"time_stamp": str(datetime.now().timestamp()),
@@ -410,7 +331,7 @@ class SimpleArbitrageBot:
                 logger.info(f"买入UP: ${price_up:.2f}")
 
             # Down still available
-            elif best_down and self.is_price_within_range(price_down):
+            elif price_down and self.is_price_within_range(price_down):
                 if self.binance_initial_price - binance_buy_price <= settings.binance_threshold:
                     return False
                 record_order = {"time_stamp": str(datetime.now().timestamp()),
@@ -467,20 +388,20 @@ class SimpleArbitrageBot:
             return True
         else:
             logger.debug(
-                f"无套利机会: UP=${price_up:.4f} ({size_up:.0f}) , DOWN=${price_down:.4f} ({size_down:.0f}) "
+                f"无套利机会: UP=${price_up:.4f} , DOWN=${price_down:.4f}"
                 f"[剩余时间: {time_remaining}]"
             )
             return False
     
-    async def monitor(self, symbol: str, interval_seconds: int = 10, settings: Settings = None):
-        """持续监控套利机会。"""
+    def show_summary(self, new_market_slug=None):
         logger.info("=" * 70)
-        logger.info(f"🚀 {symbol} 5分钟套利机器人已启动")
-        logger.info("=" * 70)
+        if not new_market_slug:
+            logger.info(f"🚀 {self.symbol} 5分钟套利机器人已启动")
+            logger.info("=" * 70)
+            logger.info(f"市场: {self.market_slug}")
+            logger.info(f"剩余时间: {self.get_time_remaining()}")
         current_balance = self.get_balance()
         logger.info(f"💰 钱包余额: ${current_balance:.2f}")
-        logger.info(f"市场: {self.market_slug}")
-        logger.info(f"剩余时间: {self.get_time_remaining()}")
         logger.info(f"模式: {'🔸 模拟' if self.settings.dry_run else '💰 真实交易'}")
         logger.info(f"订单份额: ${self.settings.order_size:.2f}")
         logger.info(f"买入区间: ${self.settings.price_floor:.2f} ~ ${self.settings.price_ceil:.2f}")
@@ -489,10 +410,13 @@ class SimpleArbitrageBot:
         logger.info(f"策略区间: {int(self.settings.strategy_start_timestamp/60)} 分 {int(self.settings.strategy_start_timestamp%60)} 秒 ~ {int(self.settings.strategy_end_timestamp/60)} 分 {int(self.settings.strategy_end_timestamp%60)} 秒")
         logger.info(f"Binance WS Health: {'🟢 Connected' if BINANCE_WEBSOCKET.is_running else '🔴 Disconnected'}")
         logger.info(f"Binance 阈值: ${self.settings.binance_threshold:.2f}")
-        self.binance_initial_price = BINANCE_WEBSOCKET.get_price()
-        logger.info(f"Binance 初始价格: ${self.binance_initial_price:.2f}")
+        self.binance_initial_price = self.get_current_binance_price()
+        logger.info(f"Binance 初始价格: ${self.binance_initial_price}")
         logger.info("=" * 70)
-        
+
+    async def monitor(self, symbol: str, interval_seconds: int = 10, settings: Settings = None):
+        """持续监控套利机会。"""
+        self.show_summary() 
         scan_count = 0
 
         # Redeem redeemable positions
@@ -510,8 +434,7 @@ class SimpleArbitrageBot:
             while True:
                 # 检查市场是否关闭
                 if self.get_time_remaining() == "CLOSED":
-                    logger.info("🚨 市场已关闭！")
-                    self.binance_final_price = BINANCE_WEBSOCKET.get_price()
+                    self.binance_final_price = self.get_current_binance_price()
                     self.show_final_summary()
                     self.is_performed = False
                     self.is_performed_informed = False
@@ -538,18 +461,8 @@ class SimpleArbitrageBot:
                     try:
                         new_market_slug = find_current_5min_market(symbol)
                         if new_market_slug != self.market_slug:
-                            logger.info(f"✅ 找到新市场: {new_market_slug}")
-                            logger.info("正在使用新市场重启机器人...")
-                            logger.info(f"买入区间: ${self.settings.price_floor:.2f} ~ ${self.settings.price_ceil:.2f}")
-                            logger.info(f"止盈幅度: ${self.settings.take_profit:.2f}")
-                            logger.info(f"止损幅度: ${self.settings.stoploss:.2f}")
-                            logger.info(f"策略区间: {int(self.settings.strategy_start_timestamp/60)} 分 {int(self.settings.strategy_start_timestamp%60)} 秒 ~  {int(self.settings.strategy_end_timestamp/60)} 分 {int(self.settings.strategy_end_timestamp%60)} 秒")
-                            logger.info(f"Binance WS Health: {'🟢 Connected' if BINANCE_WEBSOCKET.is_running else '🔴 Disconnected'}")
-                            logger.info(f"Binance 阈值: ${self.settings.binance_threshold:.2f}")
                             self.__init__(self.settings, symbol, new_market_slug)
-                            # Check Binance Price
-                            self.binance_initial_price = BINANCE_WEBSOCKET.get_price()
-                            logger.info(f"Binance Initial Price: ${self.binance_initial_price:.2f}")
+                            self.show_summary(new_market_slug) 
                             scan_count = 0
                             continue
                         else:
@@ -568,7 +481,7 @@ class SimpleArbitrageBot:
                 if self.is_performed:
                     # TP SL here
                     if self.settings.stoploss != 0 or self.settings.take_profit != 1:
-                        price_up, price_down, size_up, size_down, best_up, best_down = self.get_current_prices()
+                        price_up, price_down = self.get_current_poly_price()
                         # Check current order direction
                         current_price = price_up if self.order.get("direction") == "UP" else price_down
                         takeprofit_margin = round(self.settings.take_profit, 2)
@@ -587,7 +500,7 @@ class SimpleArbitrageBot:
                                     continue
                             self.order["takeprofit_price"] = takeprofit_price
                             self.order["takeprofit_time"] = datetime.now().strftime('%H:%M:%S')
-                            self.binance_tp_sl_price = BINANCE_WEBSOCKET.get_price()
+                            self.binance_tp_sl_price = self.get_current_binance_price()
                             logger.info(f"Take Profit triggered: ${takeprofit_price} !!!")
                             self.is_finished = True
                             continue
@@ -604,7 +517,7 @@ class SimpleArbitrageBot:
                                     continue
                             self.order["stoploss_price"] = stoploss_price
                             self.order["stoploss_time"] = datetime.now().strftime('%H:%M:%S')
-                            self.binance_tp_sl_price = BINANCE_WEBSOCKET.get_price()
+                            self.binance_tp_sl_price = self.get_current_binance_price()
                             logger.info(f"Stoploss triggered: ${stoploss_price}!!!")
                             self.is_finished = True
                     continue
@@ -616,7 +529,7 @@ class SimpleArbitrageBot:
                 logger.debug(f"\n[Scan #{scan_count} {symbol.upper()}] {datetime.now().strftime('%H:%M:%S')}")
                 
                 self.run_once(settings)
-                
+                time.sleep(1)
                 # logger.info(f"等待 {interval_seconds}秒...\n")
                 await asyncio.sleep(interval_seconds)
                 
@@ -629,22 +542,31 @@ class SimpleArbitrageBot:
 
 
 async def strategy(symbol: str):
-    """主入口点。"""
+    """
+    Entry Point
+    symbol: str (e.g. btc)
+    """
     
-    # 加载配置
+    # Load Env
     settings = load_settings()
     
     # 验证配置
     if not settings.private_key:
         logger.error("❌ 错误: .env 中未配置 POLYMARKET_PRIVATE_KEY")
         return
+    
+    # Start Binance Websocket
     global BINANCE_WEBSOCKET
-    logger.info(f"正在连接 Binance {symbol.upper()} WebSocket...")
-    BINANCE_WEBSOCKET = BinanceWebsocket(f"{symbol}usdt")
+    BINANCE_WEBSOCKET = BinanceWebsocket(symbol)
     BINANCE_WEBSOCKET.start()
 
+    # Start Polymarket Websocket
+    global POLY_WEBSOCKET
+    POLY_WEBSOCKET = PolyMarketWebsocket()
+    POLY_WEBSOCKET.start()
+    
     try:
-        bot = SimpleArbitrageBot(settings, symbol)
+        bot = LastWindowStrategyBot(settings, symbol)
         await bot.monitor(symbol, interval_seconds=0, settings=settings)
     except Exception as e:
         logger.error(f"❌ 致命错误: {e}", exc_info=True)
@@ -657,5 +579,4 @@ if __name__ == "__main__":
         sys.exit(1)
     
     symbol = sys.argv[1].lower()
-    # symbol = "btc"
     asyncio.run(strategy(symbol))
